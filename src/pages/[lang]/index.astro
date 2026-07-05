@@ -1,0 +1,61 @@
+---
+// 言語別の一覧（/{lang}/）。全エンティティを種別ごとに、ページ言語で解決した表示名で並べる
+// （MV は楽曲タイトルから導出）。各項目はその言語のページへ。既定言語も接頭辞つき（無接頭辞の
+// 既定言語一覧は作らない）。
+import Base from '../../layouts/Base.astro';
+import { allEntities, renderDisplayName } from '../../lib/entities.ts';
+import {
+  LOCALES, type Lang, neutralHome, langHome, langPath, typeLabel, ui, otherLang, SITE_NAME,
+} from '../../lib/i18n.ts';
+import type { EntityType } from '../../lib/db.ts';
+
+export function getStaticPaths() {
+  return LOCALES.map((lang) => ({ params: { lang }, props: { lang } }));
+}
+const { lang } = Astro.props as { lang: Lang };
+const L = ui[lang];
+
+const entities = allEntities();
+const order: EntityType[] = ['mv', 'song', 'person', 'group'];
+const groups = order
+  .map((t) => ({ type: t, items: entities.filter((e) => e.entity_type === t) }))
+  .filter((g) => g.items.length > 0);
+
+const alternates = [
+  { hreflang: 'x-default', path: neutralHome() },
+  { hreflang: 'ja', path: langHome('ja') },
+  { hreflang: 'en', path: langHome('en') },
+];
+const other = otherLang(lang);
+---
+<Base pageLang={lang} title={SITE_NAME} canonicalPath={langHome(lang)} alternates={alternates}>
+  <h1>{SITE_NAME}</h1>
+
+  <nav class="lang">
+    <a href={langHome(other)} hreflang={other} lang={other}>{ui[other].langName}</a>
+    <a href={neutralHome()} hreflang="x-default">{L.neutralPage}</a>
+  </nav>
+
+  {groups.map((g) => (
+    <section>
+      <h2>{typeLabel[lang][g.type]}</h2>
+      <ul class="rel">
+        {g.items.map((e) => {
+          const r = renderDisplayName(e.id, e.entity_type, lang);
+          return (
+            <li>
+              <a href={langPath(lang, e.id)} lang={r.main.lang}>{r.main.text}</a>
+              <span class="role"> melothea{e.id}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  ))}
+
+  <footer>
+    {lang === 'ja'
+      ? '構造化データ CC0 1.0 / 解説文 CC BY-SA 4.0'
+      : 'Structured data CC0 1.0 / prose CC BY-SA 4.0'} · © {SITE_NAME} contributors
+  </footer>
+</Base>

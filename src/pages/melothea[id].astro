@@ -1,0 +1,120 @@
+---
+// 言語中立ハブ（実体URI＝/melothea{n}/）。言語を特権化せず、閲覧言語に依らず真である事実を載せる
+// 実態ページ：ID・種別・年・種別区分と、クレジットグラフ（役割語彙キー＋逐語名＋出典）。そこから
+// ja/en の各言語ページへ導く。hreflang の x-default 受け皿を兼ねる。
+import Base from '../layouts/Base.astro';
+import { allEntities, getSong, getMv, neutralName,
+  songArtists, songCredits, mvsOfSong, mvSongs, mvCredits,
+  mvCreditsOfEntity, songCreditsOfEntity, songArtistOf, entityTypeOf } from '../lib/entities.ts';
+import { bi, neutralPath, langPath, neutralHome, typeLabel, SITE_NAME } from '../lib/i18n.ts';
+import type { EntityRow } from '../lib/db.ts';
+
+export function getStaticPaths() {
+  // status で絞らず draft 行もページ生成する。2aの実データは全行 status='draft' のため、
+  // published のみに絞ると生成ゼロになる——工程疎通を目的とする2aでは全エンティティを出す
+  // 意識的な選択。draft/published による生成・表示の制御（未完データの部分公開）は、
+  // フェーズ3の質の床（出典明記＋照合済み）とあわせて後段で設計する。
+  return allEntities().map((e) => ({ params: { id: String(e.id) }, props: { entity: e } }));
+}
+const { entity } = Astro.props as { entity: EntityRow };
+const id = entity.id;
+
+type Line = { roleKey: string; targetId: number; source: string };
+type Section = { title: string; lines: Line[] };
+const sections: Section[] = [];
+const facts: { label: string; value: string; lang?: string }[] = [];
+
+// --- 種別ごとの事実と関係を収集 ---
+if (entity.entity_type === 'song') {
+  const s = getSong(id);
+  if (s?.release_year != null) facts.push({ label: bi('リリース年', 'Release year'), value: String(s.release_year) });
+  sections.push({
+    title: bi('アーティスト', 'Artists'),
+    lines: songArtists(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source })),
+  });
+  sections.push({
+    title: bi('楽曲クレジット', 'Song credits'),
+    lines: songCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source })),
+  });
+  sections.push({
+    title: bi('収録された映像', 'Featured in'),
+    lines: mvsOfSong(id).map((r) => ({ roleKey: 'mv', targetId: r.mv_id, source: r.source })),
+  });
+} else if (entity.entity_type === 'mv') {
+  const m = getMv(id);
+  if (m?.production_year != null) facts.push({ label: bi('制作年', 'Production year'), value: String(m.production_year) });
+  if (m?.video_type) facts.push({ label: bi('種別', 'Type'), value: m.video_type });
+  sections.push({
+    title: bi('楽曲', 'Songs'),
+    lines: mvSongs(id).map((r) => ({ roleKey: 'song', targetId: r.song_id, source: r.source })),
+  });
+  sections.push({
+    title: bi('クレジット', 'Credits'),
+    lines: mvCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source })),
+  });
+} else {
+  // person / group：関与の逆引き
+  sections.push({
+    title: bi('映像での関与', 'Music video work'),
+    lines: mvCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.mv_id, source: r.source })),
+  });
+  sections.push({
+    title: bi('楽曲クレジット', 'Song credits'),
+    lines: songCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.song_id, source: r.source })),
+  });
+  sections.push({
+    title: bi('アーティストとして', 'As artist'),
+    lines: songArtistOf(id).map((r) => ({ roleKey: r.role, targetId: r.song_id, source: r.source })),
+  });
+}
+const shown = sections.filter((s) => s.lines.length > 0);
+
+const title = neutralName(id, entity.entity_type);
+const pageTitle = `${title.text} — ${SITE_NAME}`;
+const alternates = [
+  { hreflang: 'x-default', path: neutralPath(id) },
+  { hreflang: 'ja', path: langPath('ja', id) },
+  { hreflang: 'en', path: langPath('en', id) },
+];
+---
+<Base pageLang="mul" title={pageTitle} canonicalPath={neutralPath(id)} alternates={alternates}>
+  <p class="kicker"><a href={neutralHome()}>{SITE_NAME}</a> · melothea{id}</p>
+  <h1 lang={title.lang}>{title.text}</h1>
+
+  <dl class="facts">
+    <dt>ID</dt><dd>melothea{id}</dd>
+    <dt>{bi('種別区分', 'Type')}</dt>
+    <dd>{entity.entity_type}（{typeLabel.ja[entity.entity_type]} / {typeLabel.en[entity.entity_type]}）</dd>
+    {facts.map((f) => (<><dt>{f.label}</dt><dd lang={f.lang}>{f.value}</dd></>))}
+  </dl>
+
+  {shown.map((sec) => (
+    <section>
+      <h2>{sec.title}</h2>
+      <ul class="rel">
+        {sec.lines.map((ln) => {
+          const t = entityTypeOf(ln.targetId)!;
+          const nm = neutralName(ln.targetId, t);
+          return (
+            <li>
+              <span class="role">{ln.roleKey}</span>
+              <a href={neutralPath(ln.targetId)} lang={nm.lang}>{nm.text}</a>
+              <div class="src">{ln.source}</div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  ))}
+
+  <nav class="lang">
+    <span class="site">{bi('この項目を言語ページで', 'This entry in')}: </span>
+    <a href={langPath('ja', id)} hreflang="ja" lang="ja">日本語</a>
+    <a href={langPath('en', id)} hreflang="en" lang="en">English</a>
+  </nav>
+
+  <footer>
+    {bi('構造化データ CC0 1.0 / 解説文 CC BY-SA 4.0', 'Structured data CC0 1.0 / prose CC BY-SA 4.0')} ·
+    © {SITE_NAME} contributors
+  </footer>
+</Base>

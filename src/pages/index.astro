@@ -1,0 +1,52 @@
+---
+// ルート（言語中立）。言語を特権化しない入口：全エンティティを種別ごとに逐語名で並べ、各項目の
+// 言語中立ハブへ導く。言語選択で /ja/・/en/ の一覧へ。hreflang の x-default 受け皿を兼ねる。
+import Base from '../layouts/Base.astro';
+import { allEntities, neutralName } from '../lib/entities.ts';
+import { bi, neutralPath, neutralHome, langHome, typeLabel, SITE_NAME } from '../lib/i18n.ts';
+import type { EntityType } from '../lib/db.ts';
+
+const entities = allEntities();
+const order: EntityType[] = ['mv', 'song', 'person', 'group'];
+const groups = order
+  .map((t) => ({ type: t, items: entities.filter((e) => e.entity_type === t) }))
+  .filter((g) => g.items.length > 0);
+
+const alternates = [
+  { hreflang: 'x-default', path: neutralHome() },
+  { hreflang: 'ja', path: langHome('ja') },
+  { hreflang: 'en', path: langHome('en') },
+];
+---
+<Base pageLang="mul" title={SITE_NAME} canonicalPath={neutralHome()} alternates={alternates}>
+  <h1>{SITE_NAME}</h1>
+  <p class="kicker">{bi('監督・出演者を一次エンティティとして扱う MV アーカイブ', 'A music-video archive treating directors and performers as first-class entities')}</p>
+
+  <nav class="lang">
+    <span class="site">{bi('言語で見る', 'View in')}: </span>
+    <a href={langHome('ja')} hreflang="ja" lang="ja">日本語</a>
+    <a href={langHome('en')} hreflang="en" lang="en">English</a>
+  </nav>
+
+  {groups.map((g) => (
+    <section>
+      <h2>{g.type}（{typeLabel.ja[g.type]} / {typeLabel.en[g.type]}）</h2>
+      <ul class="rel">
+        {g.items.map((e) => {
+          const nm = neutralName(e.id, e.entity_type);
+          return (
+            <li>
+              <a href={neutralPath(e.id)} lang={nm.lang}>{nm.text}</a>
+              <span class="role"> melothea{e.id}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  ))}
+
+  <footer>
+    {bi('構造化データ CC0 1.0 / 解説文 CC BY-SA 4.0', 'Structured data CC0 1.0 / prose CC BY-SA 4.0')} ·
+    © {SITE_NAME} contributors
+  </footer>
+</Base>

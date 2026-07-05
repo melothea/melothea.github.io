@@ -1,0 +1,3 @@
+# 改行をLFに統一（ROADMAPフェーズマイナス1「含める：.gitattributes（改行をLFに統一）」）。
+# text=auto でテキスト/バイナリを自動判別し、テキストは作業ツリー・リポジトリともLFに正規化する。
+* text=auto eol=lf

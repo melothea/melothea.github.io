@@ -1,0 +1,60 @@
+---
+// 共通レイアウト：html lang・canonical・hreflang 代替を集約。
+// 絶対URLは site（https://melothea.org）から組む（canonical / hreflang はビルド時の絶対URLに効く）。
+interface Props {
+  pageLang: string; // 'ja' | 'en' | 'mul'（言語中立ハブ）
+  title: string;
+  canonicalPath: string;
+  alternates?: { hreflang: string; path: string }[]; // x-default を含める
+}
+const { pageLang, title, canonicalPath, alternates = [] } = Astro.props;
+const abs = (p: string) => new URL(p, Astro.site).href;
+---
+<!doctype html>
+<html lang={pageLang}>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="icon" href="/favicon.ico" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <link rel="canonical" href={abs(canonicalPath)} />
+    {alternates.map((a) => <link rel="alternate" hreflang={a.hreflang} href={abs(a.path)} />)}
+  </head>
+  <body>
+    <main>
+      <slot />
+    </main>
+    <style is:global>
+      :root { color-scheme: light dark; --fg: #1a1a1a; --muted: #666; --line: #ddd; --link: #0b57d0; }
+      @media (prefers-color-scheme: dark) {
+        :root { --fg: #e8e8e8; --muted: #9a9a9a; --line: #333; --link: #8ab4f8; }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0; color: var(--fg);
+        font-family: system-ui, -apple-system, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+        line-height: 1.7;
+      }
+      main { max-width: 46rem; margin: 0 auto; padding: 2rem 1.25rem 4rem; }
+      a { color: var(--link); text-decoration: none; }
+      a:hover { text-decoration: underline; }
+      h1 { font-size: 1.6rem; margin: 0 0 0.25rem; }
+      h2 { font-size: 1.05rem; margin: 2rem 0 0.5rem; padding-bottom: 0.25rem; border-bottom: 1px solid var(--line); }
+      .kicker { color: var(--muted); font-size: 0.85rem; letter-spacing: 0.02em; margin: 0 0 1rem; }
+      .facts { display: grid; grid-template-columns: auto 1fr; gap: 0.15rem 1rem; margin: 0.5rem 0; }
+      .facts dt { color: var(--muted); }
+      .facts dd { margin: 0; }
+      ul.rel { list-style: none; padding: 0; margin: 0.25rem 0; }
+      ul.rel li { padding: 0.2rem 0; }
+      .role { color: var(--muted); font-size: 0.85rem; margin-right: 0.4rem; }
+      .sub { color: var(--muted); font-size: 0.9rem; }
+      .src { color: var(--muted); font-size: 0.78rem; }
+      nav.lang { margin: 1.5rem 0; padding: 0.75rem 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+      nav.lang a { margin-right: 1rem; }
+      .site { color: var(--muted); font-size: 0.85rem; }
+      footer { margin-top: 3rem; color: var(--muted); font-size: 0.8rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+    </style>
+  </body>
+</html>

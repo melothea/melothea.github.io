@@ -1,0 +1,149 @@
+---
+// 言語ページ（/{lang}/melothea{n}/）。名義は4段カスケード（names.ts）でビルド時導出：
+//   ・作品ページで人物/グループを指すクレジット行＝クレジット文脈（renderCredit）。逐語を保持しつつ
+//     ページ言語の確立形（同一系列）／導出があれば主表示に据える。
+//   ・作品（楽曲・映像）の見出し・リンク＝人物文脈。MV は names 行を持たないため mv_songs 経由で
+//     楽曲タイトルから導出する（renderDisplayName で見出しと共用）。
+// 本スライスは全名義 locale=ja・reading=NULL のため、ja ページは確立形（ja primary）ヒット、
+// en ページは逐語（lang=ja）＋リンクに劣化する（設計どおり）。
+import Base from '../../layouts/Base.astro';
+import {
+  allEntities, getSong, getMv, mvDate, renderDisplayName,
+  songArtists, songCredits, mvsOfSong, mvSongs, mvCredits,
+  mvCreditsOfEntity, songCreditsOfEntity, songArtistOf, entityTypeOf,
+} from '../../lib/entities.ts';
+import { renderCredit, type Rendered } from '../../lib/names.ts';
+import {
+  LOCALES, type Lang, neutralPath, langPath, langHome,
+  roleLabel, typeLabel, videoTypeLabel, ui, otherLang, SITE_NAME,
+} from '../../lib/i18n.ts';
+import type { EntityRow } from '../../lib/db.ts';
+
+export function getStaticPaths() {
+  // status で絞らず draft 行もページ生成する（2aは全行 draft。工程疎通のための意識的選択。
+  // draft/published による生成・表示制御はフェーズ3の質の床とあわせて後段で設計）。言語×全エンティティ。
+  return LOCALES.flatMap((lang) =>
+    allEntities().map((e) => ({ params: { lang, id: String(e.id) }, props: { entity: e, lang } })),
+  );
+}
+const { entity, lang } = Astro.props as { entity: EntityRow; lang: Lang };
+const id = entity.id;
+const L = ui[lang];
+
+type Line = {
+  roleKey: string;
+  targetId: number;
+  source: string;
+  context: 'credit' | 'entity';
+  creditedNameId?: number | null;
+  atDate?: string | null;
+};
+type Section = { title: string; lines: Line[] };
+const sections: Section[] = [];
+const facts: { label: string; value: string }[] = [];
+
+// 見出し（MV は楽曲タイトルから導出。それ以外は人物文脈）
+const heading = renderDisplayName(id, entity.entity_type, lang);
+
+if (entity.entity_type === 'song') {
+  const s = getSong(id);
+  if (s?.release_year != null) facts.push({ label: L.releaseYear, value: String(s.release_year) });
+  sections.push({
+    title: L.artists,
+    lines: songArtists(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source, context: 'credit', creditedNameId: r.credited_name_id, atDate: null })),
+  });
+  sections.push({
+    title: L.songCredits,
+    lines: songCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source, context: 'credit', creditedNameId: r.credited_name_id, atDate: null })),
+  });
+  sections.push({
+    title: L.appearsIn,
+    lines: mvsOfSong(id).map((r) => ({ roleKey: 'mv', targetId: r.mv_id, source: r.source, context: 'entity' })),
+  });
+} else if (entity.entity_type === 'mv') {
+  const m = getMv(id);
+  const at = m ? mvDate(m) : null;
+  if (m?.production_year != null) facts.push({ label: L.productionYear, value: String(m.production_year) });
+  if (m?.video_type) facts.push({ label: L.videoType, value: videoTypeLabel[lang][m.video_type] ?? m.video_type });
+  sections.push({
+    title: L.songs,
+    lines: mvSongs(id).map((r) => ({ roleKey: 'song', targetId: r.song_id, source: r.source, context: 'entity' })),
+  });
+  sections.push({
+    title: L.credits,
+    lines: mvCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source, context: 'credit', creditedNameId: r.credited_name_id, atDate: at })),
+  });
+} else {
+  // person / group：関与の逆引き（リンク先は作品＝人物文脈で解決）
+  sections.push({
+    title: L.mvWork,
+    lines: mvCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.mv_id, source: r.source, context: 'entity' })),
+  });
+  sections.push({
+    title: L.songCredits,
+    lines: songCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.song_id, source: r.source, context: 'entity' })),
+  });
+  sections.push({
+    title: L.asArtist,
+    lines: songArtistOf(id).map((r) => ({ roleKey: r.role, targetId: r.song_id, source: r.source, context: 'entity' })),
+  });
+}
+const shown = sections.filter((s) => s.lines.length > 0);
+
+// entity 文脈のリンクも renderDisplayName で解決（MV は楽曲導出、それ以外は人物文脈）。
+const resolve = (ln: Line): Rendered =>
+  ln.context === 'credit'
+    ? renderCredit(ln.targetId, lang, ln.creditedNameId ?? null, ln.atDate ?? null)
+    : renderDisplayName(ln.targetId, entityTypeOf(ln.targetId)!, lang);
+
+const pageTitle = `${heading.main.text} — ${SITE_NAME}`;
+const alternates = [
+  { hreflang: 'x-default', path: neutralPath(id) },
+  { hreflang: 'ja', path: langPath('ja', id) },
+  { hreflang: 'en', path: langPath('en', id) },
+];
+const other = otherLang(lang);
+---
+<Base pageLang={lang} title={pageTitle} canonicalPath={langPath(lang, id)} alternates={alternates}>
+  <p class="kicker"><a href={langHome(lang)}>{SITE_NAME}</a> · melothea{id}</p>
+  <h1 lang={heading.main.lang}>{heading.main.text}</h1>
+  <p class="kicker">{typeLabel[lang][entity.entity_type]}</p>
+
+  {facts.length > 0 && (
+    <dl class="facts">
+      {facts.map((f) => (<><dt>{f.label}</dt><dd>{f.value}</dd></>))}
+    </dl>
+  )}
+
+  {shown.map((sec) => (
+    <section>
+      <h2>{sec.title}</h2>
+      <ul class="rel">
+        {sec.lines.map((ln) => {
+          const r = resolve(ln);
+          const t = entityTypeOf(ln.targetId)!;
+          const roleTxt = roleLabel[lang][ln.roleKey] ?? (t === 'mv' ? typeLabel[lang].mv : t === 'song' ? typeLabel[lang].song : ln.roleKey);
+          return (
+            <li>
+              <span class="role">{roleTxt}</span>
+              <a href={langPath(lang, ln.targetId)} lang={r.main.lang}>{r.main.text}</a>
+              {r.sub && <span class="sub"> 〈<span lang={r.sub.lang}>{r.sub.text}</span>〉</span>}
+              <div class="src">{ln.source}</div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  ))}
+
+  <nav class="lang">
+    <a href={langPath(other, id)} hreflang={other} lang={other}>{ui[other].langName}</a>
+    <a href={neutralPath(id)} hreflang="x-default">{L.neutralPage}</a>
+  </nav>
+
+  <footer>
+    {lang === 'ja'
+      ? '構造化データ CC0 1.0 / 解説文 CC BY-SA 4.0'
+      : 'Structured data CC0 1.0 / prose CC BY-SA 4.0'} · © {SITE_NAME} contributors
+  </footer>
+</Base>

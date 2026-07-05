@@ -3,3 +3,8 @@
 node_modules/
 __pycache__/
 *.pyc
+
+# Astro のビルド出力・生成型（各マシンで生成される導出物。ROADMAPフェーズマイナス1）
+#   package-lock.json は依存ロックとしてコミット対象に含める（除外しない）。
+dist/
+.astro/
