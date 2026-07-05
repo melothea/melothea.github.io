@@ -1,0 +1,10 @@
+{
+    "name": "mv_artist_raw",
+    "columns": [
+        "id",
+        "mv_id",
+        "raw_text",
+        "source"
+    ],
+    "schema": "CREATE TABLE mv_artist_raw (\n  id       INTEGER PRIMARY KEY,\n  mv_id    INTEGER NOT NULL REFERENCES mvs(id),\n  raw_text TEXT NOT NULL,\n  source   TEXT NOT NULL\n)"
+}

@@ -1,0 +1,20 @@
+{
+    "name": "names",
+    "columns": [
+        "id",
+        "entity_id",
+        "name_text",
+        "lang",
+        "locale",
+        "is_primary",
+        "name_type",
+        "origin",
+        "reading",
+        "derives_from_name_id",
+        "valid_from",
+        "valid_to",
+        "ended",
+        "source"
+    ],
+    "schema": "CREATE TABLE names (\n  id                   INTEGER PRIMARY KEY,           -- \u5185\u90e8\u30ad\u30fc\n  entity_id            INTEGER NOT NULL REFERENCES entities(id),\n  name_text            TEXT NOT NULL,                 -- \u9010\u8a9e\u306e\u8868\u8a18\n  lang                 TEXT NOT NULL,                 -- \u6587\u5b57\u5217\u81ea\u4f53\u306e\u8a00\u8a9e\u3002BCP 47\n  locale               TEXT,                          -- \u78ba\u7acb\u5f62\u3068\u3057\u3066\u901a\u7528\u3059\u308b\u8a00\u8a9e\u570f\u3002NULL\u53ef\n  is_primary           INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0,1)),\n  name_type            TEXT NOT NULL CHECK (name_type IN ('act_name','legal_name','title')),\n  origin               TEXT NOT NULL CHECK (origin IN ('original','adapted')),\n  reading              TEXT,                          -- \u3088\u307f\uff08lang=ja\u884c\u306e\u3072\u3089\u304c\u306a\u9650\u5b9a\uff09\n  derives_from_name_id INTEGER REFERENCES names(id),  -- \u7531\u6765\u5143\u306e\u540d\u7fa9\u884c\u3002NULL\u53ef\n  valid_from           TEXT,                          -- ISO 8601\u90e8\u5206\u65e5\u4ed8\u53ef\n  valid_to             TEXT,\n  ended                INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0,1)),\n  source               TEXT NOT NULL,\n  CHECK (locale IS NOT NULL OR is_primary = 0)\n)"
+}

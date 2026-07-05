@@ -1,0 +1,5 @@
+# 各マシンで一度ずつ生成する（リポジトリに含めない。ROADMAPフェーズマイナス1）
+.venv/
+node_modules/
+__pycache__/
+*.pyc

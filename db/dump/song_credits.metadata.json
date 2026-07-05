@@ -1,0 +1,12 @@
+{
+    "name": "song_credits",
+    "columns": [
+        "id",
+        "song_id",
+        "entity_id",
+        "role",
+        "credited_name_id",
+        "source"
+    ],
+    "schema": "CREATE TABLE song_credits (\n  id               INTEGER PRIMARY KEY,\n  song_id          INTEGER NOT NULL REFERENCES songs(id),\n  entity_id        INTEGER NOT NULL REFERENCES entities(id),\n  role             TEXT NOT NULL CHECK (role IN ('lyricist','composer','arranger','producer')),\n  credited_name_id INTEGER REFERENCES names(id),\n  source           TEXT NOT NULL\n)"
+}

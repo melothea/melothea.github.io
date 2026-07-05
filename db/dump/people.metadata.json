@@ -1,0 +1,12 @@
+{
+    "name": "people",
+    "columns": [
+        "id",
+        "status",
+        "description",
+        "description_source",
+        "wikidata_qid",
+        "mbid"
+    ],
+    "schema": "CREATE TABLE people (\n  id                 INTEGER PRIMARY KEY REFERENCES entities(id),\n  status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),\n  description        TEXT,\n  description_source TEXT CHECK (description_source IN ('ai','manual','ai_edited')),\n  wikidata_qid       TEXT,\n  mbid               TEXT,\n  CHECK (description IS NOT NULL OR description_source IS NULL)  -- \u8aac\u660e\u6587\u306a\u3057\u306bsource\u3060\u3051\u3092\u6301\u305f\u306a\u3044\n)"
+}

@@ -1,0 +1,11 @@
+{
+    "name": "location_raw",
+    "columns": [
+        "id",
+        "mv_id",
+        "raw_text",
+        "source",
+        "external_id"
+    ],
+    "schema": "CREATE TABLE location_raw (\n  id          INTEGER PRIMARY KEY,\n  mv_id       INTEGER NOT NULL REFERENCES mvs(id),\n  raw_text    TEXT NOT NULL,\n  source      TEXT NOT NULL,\n  external_id TEXT                                       -- Wikidata/OSM\u7b49\u306e\u5916\u90e8ID\u3002NULL\u53ef\n)"
+}

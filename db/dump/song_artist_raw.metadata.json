@@ -1,0 +1,10 @@
+{
+    "name": "song_artist_raw",
+    "columns": [
+        "id",
+        "song_id",
+        "raw_text",
+        "source"
+    ],
+    "schema": "CREATE TABLE song_artist_raw (\n  id       INTEGER PRIMARY KEY,\n  song_id  INTEGER NOT NULL REFERENCES songs(id),\n  raw_text TEXT NOT NULL,\n  source   TEXT NOT NULL\n)"
+}
