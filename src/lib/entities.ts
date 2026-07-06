@@ -93,6 +93,22 @@ export function entityTypeOf(id: number): EntityType | undefined {
   return getEntity(id)?.entity_type;
 }
 
+/** MV に統合表示する楽曲クレジット（作詞・作曲・編曲）を mv_songs 経由で収録楽曲ごとに束ねる。
+ *  単曲MVは1グループ（クレジット欄に統合）、複数楽曲（メドレー）は楽曲ごとに小見出しで分ける。 */
+export function mvSongCreditGroups(mvId: number): { songId: number; credits: SongCreditRow[] }[] {
+  return mvSongs(mvId).map((ms) => ({ songId: ms.song_id, credits: songCredits(ms.song_id) }));
+}
+
+/** role='director' の mv_credits を持つエンティティの重複なし導出（属性は保存しない・ビルド時クエリ）。 */
+export function directorEntities(): EntityRow[] {
+  return query<EntityRow>(
+    `SELECT DISTINCT e.id, e.entity_type
+       FROM entities e JOIN mv_credits mc ON mc.entity_id = e.id
+      WHERE mc.role = 'director'
+      ORDER BY e.id`,
+  );
+}
+
 /** 見出し・リンクの表示名を人物文脈（renderPerson）で解決する。ただし MV は names 行を持たない
  *  ため、mv_songs 経由で収録楽曲の renderPerson からタイトルを導出する（複数楽曲は ' / ' 結合、
  *  導出不能時のみ識別子 melothea{n} に劣化）。見出しと entity 文脈のリンク解決で共用する。 */

@@ -4,7 +4,7 @@
 // ja/en の各言語ページへ導く。hreflang の x-default 受け皿を兼ねる。
 import Base from '../layouts/Base.astro';
 import { allEntities, getSong, getMv, neutralName,
-  songArtists, songCredits, mvsOfSong, mvSongs, mvCredits,
+  songArtists, songCredits, mvsOfSong, mvSongs, mvCredits, mvSongCreditGroups,
   mvCreditsOfEntity, songCreditsOfEntity, songArtistOf, entityTypeOf } from '../lib/entities.ts';
 import { bi, neutralPath, langPath, neutralHome, typeLabel, SITE_NAME } from '../lib/i18n.ts';
 import type { EntityRow } from '../lib/db.ts';
@@ -20,7 +20,7 @@ const { entity } = Astro.props as { entity: EntityRow };
 const id = entity.id;
 
 type Line = { roleKey: string; targetId: number; source: string };
-type Section = { title: string; lines: Line[] };
+type Section = { title: string; titleLang?: string; level?: 2 | 3; lines: Line[] };
 const sections: Section[] = [];
 const facts: { label: string; value: string; lang?: string }[] = [];
 
@@ -48,10 +48,28 @@ if (entity.entity_type === 'song') {
     title: bi('楽曲', 'Songs'),
     lines: mvSongs(id).map((r) => ({ roleKey: 'song', targetId: r.song_id, source: r.source })),
   });
-  sections.push({
-    title: bi('クレジット', 'Credits'),
-    lines: mvCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source })),
-  });
+  // クレジット欄：MVクレジット（監督・出演）に mv_songs 経由の楽曲クレジット（作詞・作曲・編曲）を統合。
+  // 単曲MVは1欄に統合、複数楽曲（メドレー）は楽曲ごとに小見出しで分ける。
+  // ※A案：ハブは既存の一律描画（neutralName＝クレジット先エンティティのprimary逐語）に合わせ、
+  //   credited_name_id・atDate を解決しない。名義解決仕様の第1段規則（クレジット文脈では実クレジットの
+  //   逐語名義を常に保持・表示する）からの乖離は認識に残し、乖離が顕在化する検証データを追加した段階で
+  //   ハブのクレジット解決を改めて忠実化する。
+  const songGroups = mvSongCreditGroups(id);
+  const mvCreditLines: Line[] = mvCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source }));
+  const songCreditLine = (c: { role: string; entity_id: number; source: string }): Line =>
+    ({ roleKey: c.role, targetId: c.entity_id, source: c.source });
+  if (songGroups.length <= 1) {
+    sections.push({
+      title: bi('クレジット', 'Credits'),
+      lines: [...mvCreditLines, ...(songGroups[0]?.credits ?? []).map(songCreditLine)],
+    });
+  } else {
+    sections.push({ title: bi('クレジット', 'Credits'), lines: mvCreditLines });
+    for (const g of songGroups) {
+      const st = neutralName(g.songId, 'song');
+      sections.push({ title: st.text, titleLang: st.lang, level: 3, lines: g.credits.map(songCreditLine) });
+    }
+  }
 } else {
   // person / group：関与の逆引き
   sections.push({

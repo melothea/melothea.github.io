@@ -3,9 +3,9 @@
 // （MV は楽曲タイトルから導出）。各項目はその言語のページへ。既定言語も接頭辞つき（無接頭辞の
 // 既定言語一覧は作らない）。
 import Base from '../../layouts/Base.astro';
-import { allEntities, renderDisplayName } from '../../lib/entities.ts';
+import { allEntities, renderDisplayName, directorEntities } from '../../lib/entities.ts';
 import {
-  LOCALES, type Lang, neutralHome, langHome, langPath, typeLabel, ui, otherLang, SITE_NAME,
+  LOCALES, type Lang, neutralHome, langHome, langPath, roleLabel, typeLabel, ui, otherLang, SITE_NAME,
 } from '../../lib/i18n.ts';
 import type { EntityType } from '../../lib/db.ts';
 
@@ -16,10 +16,14 @@ const { lang } = Astro.props as { lang: Lang };
 const L = ui[lang];
 
 const entities = allEntities();
-const order: EntityType[] = ['mv', 'song', 'person', 'group'];
+// 楽曲は一覧から外す（楽曲ページの生成・公開は維持。導線はMVページの楽曲リンク経由）。
+const order: EntityType[] = ['mv', 'person', 'group'];
 const groups = order
   .map((t) => ({ type: t, items: entities.filter((e) => e.entity_type === t) }))
   .filter((g) => g.items.length > 0);
+// 監督＝mv_credits role='director' の重複なし導出（属性は保存しない・ビルド時）。人物・グループの
+// 全量一覧の上位に置く（全量一覧は残す）。
+const directors = directorEntities();
 
 const alternates = [
   { hreflang: 'x-default', path: neutralHome() },
@@ -36,7 +40,41 @@ const other = otherLang(lang);
     <a href={neutralHome()} hreflang="x-default">{L.neutralPage}</a>
   </nav>
 
-  {groups.map((g) => (
+  {groups.filter((g) => g.type === 'mv').map((g) => (
+    <section>
+      <h2>{typeLabel[lang][g.type]}</h2>
+      <ul class="rel">
+        {g.items.map((e) => {
+          const r = renderDisplayName(e.id, e.entity_type, lang);
+          return (
+            <li>
+              <a href={langPath(lang, e.id)} lang={r.main.lang}>{r.main.text}</a>
+              <span class="role"> melothea{e.id}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  ))}
+
+  {directors.length > 0 && (
+    <section>
+      <h2>{roleLabel[lang].director}</h2>
+      <ul class="rel">
+        {directors.map((e) => {
+          const r = renderDisplayName(e.id, e.entity_type, lang);
+          return (
+            <li>
+              <a href={langPath(lang, e.id)} lang={r.main.lang}>{r.main.text}</a>
+              <span class="role"> melothea{e.id}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  )}
+
+  {groups.filter((g) => g.type !== 'mv').map((g) => (
     <section>
       <h2>{typeLabel[lang][g.type]}</h2>
       <ul class="rel">

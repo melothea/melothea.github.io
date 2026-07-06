@@ -9,7 +9,7 @@
 import Base from '../../layouts/Base.astro';
 import {
   allEntities, getSong, getMv, mvDate, renderDisplayName,
-  songArtists, songCredits, mvsOfSong, mvSongs, mvCredits,
+  songArtists, songCredits, mvsOfSong, mvSongs, mvCredits, mvSongCreditGroups,
   mvCreditsOfEntity, songCreditsOfEntity, songArtistOf, entityTypeOf,
 } from '../../lib/entities.ts';
 import { renderCredit, type Rendered } from '../../lib/names.ts';
@@ -38,7 +38,7 @@ type Line = {
   creditedNameId?: number | null;
   atDate?: string | null;
 };
-type Section = { title: string; lines: Line[] };
+type Section = { title: string; titleLang?: string; level?: 2 | 3; lines: Line[] };
 const sections: Section[] = [];
 const facts: { label: string; value: string }[] = [];
 
@@ -69,10 +69,25 @@ if (entity.entity_type === 'song') {
     title: L.songs,
     lines: mvSongs(id).map((r) => ({ roleKey: 'song', targetId: r.song_id, source: r.source, context: 'entity' })),
   });
-  sections.push({
-    title: L.credits,
-    lines: mvCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source, context: 'credit', creditedNameId: r.credited_name_id, atDate: at })),
-  });
+  // クレジット欄：MVクレジット（監督・出演）に、mv_songs 経由の楽曲クレジット（作詞・作曲・編曲）を
+  // クレジット文脈（renderCredit・atDate=MVの日付）で統合。単曲MVは1欄に統合、複数楽曲（メドレー）は
+  // 楽曲ごとに小見出し（level 3）で分ける。楽曲行そのものへのリンクは上の「楽曲」節で残す。
+  const songGroups = mvSongCreditGroups(id);
+  const mvCreditLines: Line[] = mvCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source, context: 'credit', creditedNameId: r.credited_name_id, atDate: at }));
+  const songCreditLine = (c: { role: string; entity_id: number; source: string; credited_name_id: number | null }): Line =>
+    ({ roleKey: c.role, targetId: c.entity_id, source: c.source, context: 'credit', creditedNameId: c.credited_name_id, atDate: at });
+  if (songGroups.length <= 1) {
+    sections.push({
+      title: L.credits,
+      lines: [...mvCreditLines, ...(songGroups[0]?.credits ?? []).map(songCreditLine)],
+    });
+  } else {
+    sections.push({ title: L.credits, lines: mvCreditLines });
+    for (const g of songGroups) {
+      const st = renderDisplayName(g.songId, 'song', lang);
+      sections.push({ title: st.main.text, titleLang: st.main.lang, level: 3, lines: g.credits.map(songCreditLine) });
+    }
+  }
 } else {
   // person / group：関与の逆引き（リンク先は作品＝人物文脈で解決）
   sections.push({
@@ -117,7 +132,9 @@ const other = otherLang(lang);
 
   {shown.map((sec) => (
     <section>
-      <h2>{sec.title}</h2>
+      {sec.level === 3
+        ? <h3 lang={sec.titleLang}>{sec.title}</h3>
+        : <h2 lang={sec.titleLang}>{sec.title}</h2>}
       <ul class="rel">
         {sec.lines.map((ln) => {
           const r = resolve(ln);

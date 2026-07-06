@@ -2,15 +2,19 @@
 // ルート（言語中立）。言語を特権化しない入口：全エンティティを種別ごとに逐語名で並べ、各項目の
 // 言語中立ハブへ導く。言語選択で /ja/・/en/ の一覧へ。hreflang の x-default 受け皿を兼ねる。
 import Base from '../layouts/Base.astro';
-import { allEntities, neutralName } from '../lib/entities.ts';
+import { allEntities, neutralName, directorEntities } from '../lib/entities.ts';
 import { bi, neutralPath, neutralHome, langHome, typeLabel, SITE_NAME } from '../lib/i18n.ts';
 import type { EntityType } from '../lib/db.ts';
 
 const entities = allEntities();
-const order: EntityType[] = ['mv', 'song', 'person', 'group'];
+// 楽曲は一覧から外す（楽曲ページの生成・公開は維持。導線はMVページの楽曲リンク経由）。
+const order: EntityType[] = ['mv', 'person', 'group'];
 const groups = order
   .map((t) => ({ type: t, items: entities.filter((e) => e.entity_type === t) }))
   .filter((g) => g.items.length > 0);
+// 監督＝mv_credits role='director' の重複なし導出（属性は保存しない・ビルド時）。人物・グループの
+// 全量一覧の上位に置く（全量一覧は残す）。
+const directors = directorEntities();
 
 const alternates = [
   { hreflang: 'x-default', path: neutralHome() },
@@ -28,7 +32,41 @@ const alternates = [
     <a href={langHome('en')} hreflang="en" lang="en">English</a>
   </nav>
 
-  {groups.map((g) => (
+  {groups.filter((g) => g.type === 'mv').map((g) => (
+    <section>
+      <h2>{g.type}（{typeLabel.ja[g.type]} / {typeLabel.en[g.type]}）</h2>
+      <ul class="rel">
+        {g.items.map((e) => {
+          const nm = neutralName(e.id, e.entity_type);
+          return (
+            <li>
+              <a href={neutralPath(e.id)} lang={nm.lang}>{nm.text}</a>
+              <span class="role"> melothea{e.id}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  ))}
+
+  {directors.length > 0 && (
+    <section>
+      <h2>director（{bi('監督', 'Director')}）</h2>
+      <ul class="rel">
+        {directors.map((e) => {
+          const nm = neutralName(e.id, e.entity_type);
+          return (
+            <li>
+              <a href={neutralPath(e.id)} lang={nm.lang}>{nm.text}</a>
+              <span class="role"> melothea{e.id}</span>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  )}
+
+  {groups.filter((g) => g.type !== 'mv').map((g) => (
     <section>
       <h2>{g.type}（{typeLabel.ja[g.type]} / {typeLabel.en[g.type]}）</h2>
       <ul class="rel">
