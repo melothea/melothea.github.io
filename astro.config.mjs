@@ -10,8 +10,7 @@ import { defineConfig } from 'astro/config';
 //   ・実体URI＝/melothea{n}/（言語中立ハブ。末尾スラッシュ規則を全経路で統一。スラッシュなし
 //     アクセスの実挙動確認はテストデプロイ時＝手順6の残タスク）
 export default defineConfig({
-  // 疎通段階の暫定値。カスタムドメイン(melothea.org)設定時に apex へ戻す（手順6後半）。
-  site: 'https://melothea.github.io',
+  site: 'https://melothea.org',
   trailingSlash: 'always',
   build: { format: 'directory' },
   i18n: {
