@@ -8,3 +8,8 @@ __pycache__/
 #   package-lock.json は依存ロックとしてコミット対象に含める（除外しない）。
 dist/
 .astro/
+
+# sqlite-diffable dump --all が内部採番表 sqlite_sequence を出力するため除外する。
+#   entities の AUTOINCREMENT カウンタ（データモデルの一部でない内部状態）で、
+#   正本ダンプの対象外（詳細は正本ドキュメント）。
+db/dump/sqlite_sequence.*

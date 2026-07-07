@@ -9,10 +9,11 @@
 --   sqlite3 <db> "PRAGMA foreign_keys=ON;" ".read db/ci_checks.sql"
 --   出力が1行でもあればビルド失敗（呼び出し側で判定）。
 --
--- 検査対象8項目：
+-- 検査対象9項目：
 --   1 name_type × entity_type / 2 memberships.member型 / 3 credits二表の参加者型 /
 --   4 出演個人原則 / 5 derives_from 非循環・同一entity内 / 6 期間の正気度 /
---   7 mv_credits.role・video_type の語彙リスト照合 / 8 完全重複行（二重投入検出）
+--   7 mv_credits.role・video_type の語彙リスト照合 / 8 完全重複行（二重投入検出） /
+--   9 source記述規約の書式検査（4形式適合・禁止トークン不在）
 
 -- ============================================================
 -- 0. サブタイプ表 × entity_type の照合
@@ -249,3 +250,53 @@ FROM (
   FROM mv_artist_raw
   WINDOW w AS (PARTITION BY mv_id, raw_text, source)
 ) WHERE c > 1 AND id <> first_id;
+
+-- ============================================================
+-- 9. source記述規約の書式検査（2026/07/07確定。正本：MV_DATABASE.md「source記述規約」節）
+--    source列を持つ全10表（names, memberships, song_artists, song_credits, mv_credits,
+--    mv_songs, crew_raw, location_raw, song_artist_raw, mv_artist_raw）を対象に、
+--    (a) 4形式のいずれにも適合しない行、(b) 禁止トークンを含む行、を違反として返す。
+--    有効化は既存行のバックフィル適用後（規約「CI書式検査」細則）。空表は0行で自明に通過する。
+--
+--    4形式（日付はゼロ埋めYYYY/MM/DD。形式定義日付をGLOBの[0-9]クラスで検査）：
+--      A 一次未確認：「；最終確認先：」を含み末尾が「（未確認）」
+--      B 一次確認済：「（確認 YYYY/MM/DD）」を含む
+--      C 編纂者観察：「（編纂者確認 YYYY/MM/DD）」を含む
+--      D 典拠非公開：「（典拠非公開 YYYY/MM/DD、記録R-」を含む
+--    禁止トークン：依頼者 / 要確認 / →
+--    id は表をまたいで衝突するため detail に表名を含めて自己識別させる。
+-- ============================================================
+SELECT 'source_format' AS check_name, u.id AS id, u.tbl||' source='||u.source AS detail
+FROM (
+  SELECT 'names' AS tbl, id, source FROM names
+  UNION ALL SELECT 'memberships', id, source FROM memberships
+  UNION ALL SELECT 'song_artists', id, source FROM song_artists
+  UNION ALL SELECT 'song_credits', id, source FROM song_credits
+  UNION ALL SELECT 'mv_credits', id, source FROM mv_credits
+  UNION ALL SELECT 'mv_songs', id, source FROM mv_songs
+  UNION ALL SELECT 'crew_raw', id, source FROM crew_raw
+  UNION ALL SELECT 'location_raw', id, source FROM location_raw
+  UNION ALL SELECT 'song_artist_raw', id, source FROM song_artist_raw
+  UNION ALL SELECT 'mv_artist_raw', id, source FROM mv_artist_raw
+) u
+WHERE NOT (
+      (u.source LIKE '%；最終確認先：%' AND u.source LIKE '%（未確認）')
+   OR u.source GLOB '*（確認 [0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]）*'
+   OR u.source GLOB '*（編纂者確認 [0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]）*'
+   OR u.source GLOB '*（典拠非公開 [0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]、記録R-*'
+);
+
+SELECT 'source_forbidden_token' AS check_name, u.id AS id, u.tbl||' source='||u.source AS detail
+FROM (
+  SELECT 'names' AS tbl, id, source FROM names
+  UNION ALL SELECT 'memberships', id, source FROM memberships
+  UNION ALL SELECT 'song_artists', id, source FROM song_artists
+  UNION ALL SELECT 'song_credits', id, source FROM song_credits
+  UNION ALL SELECT 'mv_credits', id, source FROM mv_credits
+  UNION ALL SELECT 'mv_songs', id, source FROM mv_songs
+  UNION ALL SELECT 'crew_raw', id, source FROM crew_raw
+  UNION ALL SELECT 'location_raw', id, source FROM location_raw
+  UNION ALL SELECT 'song_artist_raw', id, source FROM song_artist_raw
+  UNION ALL SELECT 'mv_artist_raw', id, source FROM mv_artist_raw
+) u
+WHERE u.source LIKE '%依頼者%' OR u.source LIKE '%要確認%' OR u.source LIKE '%→%';
