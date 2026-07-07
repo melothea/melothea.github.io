@@ -10,7 +10,7 @@
 | `ci_checks.sql` | テーブル間整合のCI検証クエリ（違反行を返すSELECT群） | 手動 |
 | `seed.sql` | フェーズ2a シード（CS Channel期3本） | 手動 |
 | `melothea.db` | SQLite正本（schema→seed から生成） | **SQLiteのみが編集対象** |
-| `dump/` | JSONLダンプ（自動生成・編集禁止。`dump/README.md`参照） | 自動 |
+| `dump/` | JSONLダンプ（自動生成・編集禁止。） | 自動 |
 
 SQLite接続は投入・ビルドとも常に `PRAGMA foreign_keys=ON` を固定する。
 
@@ -45,6 +45,17 @@ sqlite3 db/melothea.db "PRAGMA foreign_keys=ON;" ".read db/ci_checks.sql"
 
 スキーマ変更時は毎回 `sqlite3 ":memory:" ".read db/schema.sql"` で構文素通しを確認する。
 
-## JSONLダンプの再生成
+## JSONLダンプ（dump/）
 
-`dump/README.md` のコマンド（実テーブル15件を明示指定。`--all` は使わない）。
+`dump/` は正本から sqlite-diffable で生成した差分可読なダンプ（各テーブルにつき
+`<table>.metadata.json` ＋ `<table>.ndjson`）。役割はGit差分の可読性・保存性・
+可搬性であり、正本ではない。編集しない。再生成は全消し→正本からの作り直しで、
+手順の正本は内部作業文書側で管理する。
+
+- `--all` での生成はSQLiteの内部表 `sqlite_sequence` も出力するが、データモデル外の
+  採番状態（AUTOINCREMENT）のため `.gitignore` で追跡外（採番状態は `melothea.db`
+  のみが保持する）
+- ダンプからの load はデータ復元用途に限る。その際 `sqlite_sequence` は予約名のため
+  対象から除く。またダンプは表レベルの CREATE TABLE（CHECK含む）は保持するが
+  部分ユニーク索引（`idx_names_primary`）は保持しない——**正本の再構築は
+  `db/schema.sql` を唯一の経路とする**
