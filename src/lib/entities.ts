@@ -99,6 +99,86 @@ export function mvSongCreditGroups(mvId: number): { songId: number; credits: Son
   return mvSongs(mvId).map((ms) => ({ songId: ms.song_id, credits: songCredits(ms.song_id) }));
 }
 
+/** MV のアーティスト：mv_songs 経由の収録楽曲の song_artists role='main' を重複なし導出。
+ *  メドレー（複数楽曲）は position 順に走査し entity_id で重複除去。featured は含めない
+ *  （実例投入時に条件付き表示を実装予定）。 */
+export function mvMainArtists(mvId: number): SongArtistRow[] {
+  const rows = query<SongArtistRow>(
+    `SELECT sa.* FROM song_artists sa
+       JOIN mv_songs ms ON ms.song_id = sa.song_id
+      WHERE ms.mv_id = ? AND sa.role = 'main'
+      ORDER BY ms.position, ms.id, sa.id`,
+    mvId,
+  );
+  const seen = new Set<number>();
+  const out: SongArtistRow[] = [];
+  for (const r of rows) {
+    if (!seen.has(r.entity_id)) {
+      seen.add(r.entity_id);
+      out.push(r);
+    }
+  }
+  return out;
+}
+
+/** アーティストとして紐づく MV の逆引き：song_artists role='main' → mv_songs を JOIN し、
+ *  当該エンティティが main アーティストの MV を mv_id で重複除去。source は帰属を担う
+ *  song_artists 行のもの。featured は含めない。 */
+export function artistMvsOf(entityId: number): { mvId: number; source: string }[] {
+  const rows = query<{ mv_id: number; source: string }>(
+    `SELECT ms.mv_id AS mv_id, sa.source AS source
+       FROM song_artists sa
+       JOIN mv_songs ms ON ms.song_id = sa.song_id
+      WHERE sa.entity_id = ? AND sa.role = 'main'
+      ORDER BY ms.mv_id, ms.id`,
+    entityId,
+  );
+  const seen = new Set<number>();
+  const out: { mvId: number; source: string }[] = [];
+  for (const r of rows) {
+    if (!seen.has(r.mv_id)) {
+      seen.add(r.mv_id);
+      out.push({ mvId: r.mv_id, source: r.source });
+    }
+  }
+  return out;
+}
+
+/** 人物・グループの楽曲関与を楽曲ごとに集約：song_artists role='main'（アーティスト）と
+ *  song_credits 全roleを song_id でグループ化。featured は含めない。各楽曲の役割エントリを
+ *  Artist系→作詞→作曲→編曲→プロデュース の規定順に整列し、楽曲は song_id 昇順で返す。 */
+export function entitySongRoles(
+  entityId: number,
+): { songId: number; roles: { roleKey: string; source: string }[] }[] {
+  const artist = query<SongArtistRow>(
+    "SELECT * FROM song_artists WHERE entity_id = ? AND role = 'main' ORDER BY song_id, id",
+    entityId,
+  );
+  const credits = query<SongCreditRow>(
+    'SELECT * FROM song_credits WHERE entity_id = ? ORDER BY song_id, id',
+    entityId,
+  );
+  const roleOrder = ['main', 'lyricist', 'composer', 'arranger', 'producer'];
+  const rank = (k: string) => {
+    const i = roleOrder.indexOf(k);
+    return i < 0 ? roleOrder.length : i;
+  };
+  const bySong = new Map<number, { roleKey: string; source: string }[]>();
+  const add = (songId: number, roleKey: string, source: string) => {
+    const list = bySong.get(songId) ?? [];
+    list.push({ roleKey, source });
+    bySong.set(songId, list);
+  };
+  for (const r of artist) add(r.song_id, r.role, r.source);
+  for (const r of credits) add(r.song_id, r.role, r.source);
+  return [...bySong.keys()]
+    .sort((a, b) => a - b)
+    .map((songId) => ({
+      songId,
+      roles: bySong.get(songId)!.slice().sort((x, y) => rank(x.roleKey) - rank(y.roleKey)),
+    }));
+}
+
 /** role='director' の mv_credits を持つエンティティの重複なし導出（属性は保存しない・ビルド時クエリ）。 */
 export function directorEntities(): EntityRow[] {
   return query<EntityRow>(
