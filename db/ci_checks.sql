@@ -258,12 +258,16 @@ FROM (
 --    (a) 4形式のいずれにも適合しない行、(b) 禁止トークンを含む行、を違反として返す。
 --    有効化は既存行のバックフィル適用後（規約「CI書式検査」細則）。空表は0行で自明に通過する。
 --
---    4形式（日付はゼロ埋めYYYY/MM/DD。形式定義日付をGLOBの[0-9]クラスで検査）：
---      A 一次未確認：「；最終確認先：」を含み末尾が「（未確認）」
+--    4形式（日付はゼロ埋めYYYY/MM/DD。B・C・DはマーカーをGLOBの[0-9]クラスで検査）：
+--      A 一次未確認：B・C・Dマーカーを含まない非空の出典列挙
 --      B 一次確認済：「（確認 YYYY/MM/DD）」を含む
 --      C 編纂者観察：「（編纂者確認 YYYY/MM/DD）」を含む
 --      D 典拠非公開：「（典拠非公開 YYYY/MM/DD、記録R-」を含む
---    禁止トークン：依頼者 / 要確認 / →
+--    形式Aはマーカー接頭辞（（確認 ／（編纂者確認 ／（典拠非公開 ）を含まない非空文字列。
+--    これによりマーカーはあるが日付がゼロ埋めでない・不完全な行はB/C/D GLOBに外れ、
+--    かつA枝のNOT LIKEに阻まれて違反として捕捉される。旧形式A句（；最終確認先：…（未確認））の
+--    残存はA枝を通過するため source_forbidden_token（最終確認先）側で捕捉する。
+--    禁止トークン：依頼者 / 要確認 / → / 最終確認先
 --    id は表をまたいで衝突するため detail に表名を含めて自己識別させる。
 -- ============================================================
 SELECT 'source_format' AS check_name, u.id AS id, u.tbl||' source='||u.source AS detail
@@ -280,10 +284,13 @@ FROM (
   UNION ALL SELECT 'mv_artist_raw', id, source FROM mv_artist_raw
 ) u
 WHERE NOT (
-      (u.source LIKE '%；最終確認先：%' AND u.source LIKE '%（未確認）')
-   OR u.source GLOB '*（確認 [0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]）*'
+      u.source GLOB '*（確認 [0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]）*'
    OR u.source GLOB '*（編纂者確認 [0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]）*'
    OR u.source GLOB '*（典拠非公開 [0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]、記録R-*'
+   OR ( u.source <> ''
+        AND u.source NOT LIKE '%（確認 %'
+        AND u.source NOT LIKE '%（編纂者確認 %'
+        AND u.source NOT LIKE '%（典拠非公開 %' )
 );
 
 SELECT 'source_forbidden_token' AS check_name, u.id AS id, u.tbl||' source='||u.source AS detail
@@ -299,4 +306,5 @@ FROM (
   UNION ALL SELECT 'song_artist_raw', id, source FROM song_artist_raw
   UNION ALL SELECT 'mv_artist_raw', id, source FROM mv_artist_raw
 ) u
-WHERE u.source LIKE '%依頼者%' OR u.source LIKE '%要確認%' OR u.source LIKE '%→%';
+WHERE u.source LIKE '%依頼者%' OR u.source LIKE '%要確認%' OR u.source LIKE '%→%'
+   OR u.source LIKE '%最終確認先%';
