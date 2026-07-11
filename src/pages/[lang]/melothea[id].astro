@@ -148,7 +148,7 @@ const other = otherLang(lang);
       <dt>{L.activePeriod}</dt>
       <dd>
         {activityPeriods.map((p) => p.text).join(', ')}
-        {activityPeriods.map((p) => (<div class="src">{p.source}</div>))}
+        <details class="srcbox"><summary>{L.sources}</summary>{activityPeriods.map((p) => (<div class="src">{p.source}</div>))}</details>
       </dd>
     </dl>
   )}
@@ -174,7 +174,7 @@ const other = otherLang(lang);
               <span class="role">{roleTxt}</span>
               <a href={langPath(lang, ln.targetId)} lang={r.main.lang}>{r.main.text}</a>{ln.year != null && ` (${ln.year})`}
               {r.sub && <span class="sub"> 〈<span lang={r.sub.lang}>{r.sub.text}</span>〉</span>}
-              <div class="src">{ln.source}</div>
+              <details class="srcbox"><summary>{L.sources}</summary><div class="src">{ln.source}</div></details>
             </li>
           );
         })}
@@ -193,7 +193,7 @@ const other = otherLang(lang);
             <li>
               <a href={langPath(lang, g.songId)} lang={r.main.lang}>{r.main.text}</a>{g.year != null && ` (${g.year})`}
               {' '}<span class="role">{roleTxt}</span>
-              {g.roles.map((e) => (<div class="src">{e.source}</div>))}
+              <details class="srcbox"><summary>{L.sources}</summary>{g.roles.map((e) => (<div class="src">{e.source}</div>))}</details>
             </li>
           );
         })}
@@ -210,7 +210,7 @@ const other = otherLang(lang);
           return (
             <li>
               <a href={langPath(lang, m.entityId)} lang={r.main.lang}>{r.main.text}</a> ({m.periods.map((p) => p.text).join(', ')})
-              {m.periods.map((p) => (<div class="src">{p.source}</div>))}
+              <details class="srcbox"><summary>{L.sources}</summary>{m.periods.map((p) => (<div class="src">{p.source}</div>))}</details>
             </li>
           );
         })}
@@ -227,7 +227,7 @@ const other = otherLang(lang);
           return (
             <li>
               <a href={langPath(lang, m.entityId)} lang={r.main.lang}>{r.main.text}</a> ({m.periods.map((p) => p.text).join(', ')})
-              {m.periods.map((p) => (<div class="src">{p.source}</div>))}
+              <details class="srcbox"><summary>{L.sources}</summary>{m.periods.map((p) => (<div class="src">{p.source}</div>))}</details>
             </li>
           );
         })}
