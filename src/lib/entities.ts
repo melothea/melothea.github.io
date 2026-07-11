@@ -179,6 +179,99 @@ export function entitySongRoles(
     }));
 }
 
+// ---- memberships / 活動期間の集約（グループのメンバー節・エンティティの所属節・活動期間facts）----
+
+const EN_DASH = '–';
+type MembershipRow = {
+  id: number;
+  group_id: number;
+  member_id: number;
+  joined: string | null;
+  left: string | null;
+  ended: number;
+  source: string;
+};
+
+/** 1区間の期間文字列。to=NULL は開区間（ended=0）のみ「YYYY–」。to=NULL かつ ended=1 は
+ *  描画未定義のため停止（共通規則）。 */
+function periodText(from: string | null, to: string | null, ended: number): string {
+  if (to == null && ended === 1) {
+    throw new Error(`period undefined (from=${from}, to=NULL, ended=1): 描画未定義。共通規則により停止`);
+  }
+  return `${from ?? ''}${EN_DASH}${to ?? ''}`;
+}
+
+/** 並び用ソートキー：en primary の name_text、不在なら ja primary の name_text（素のコードポイント比較）。 */
+function entitySortKey(entityId: number): string {
+  const en = queryOne<{ name_text: string }>(
+    "SELECT name_text FROM names WHERE entity_id = ? AND locale = 'en' AND is_primary = 1 LIMIT 1",
+    entityId,
+  );
+  if (en) return en.name_text;
+  const ja = queryOne<{ name_text: string }>(
+    "SELECT name_text FROM names WHERE entity_id = ? AND locale = 'ja' AND is_primary = 1 LIMIT 1",
+    entityId,
+  );
+  return ja?.name_text ?? '';
+}
+
+const cmpStr = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+export interface PeriodGroup {
+  entityId: number; // 相手（member_id または group_id）
+  periods: { text: string; source: string }[]; // joined 昇順
+}
+
+/** memberships 行を「相手」で集約。並び：集約後の最古 joined 昇順、タイは entitySortKey の
+ *  コードポイント。各グループ内の期間は joined 昇順。 */
+function aggregateMemberships(rows: MembershipRow[], otherOf: (r: MembershipRow) => number): PeriodGroup[] {
+  const byOther = new Map<number, MembershipRow[]>();
+  for (const r of rows) {
+    const k = otherOf(r);
+    const list = byOther.get(k);
+    if (list) list.push(r);
+    else byOther.set(k, [r]);
+  }
+  const groups = [...byOther.entries()].map(([entityId, rs]) => {
+    const sorted = rs.slice().sort((a, b) => cmpStr(a.joined ?? '', b.joined ?? ''));
+    return {
+      entityId,
+      earliest: sorted[0]?.joined ?? '',
+      sortKey: entitySortKey(entityId),
+      periods: sorted.map((r) => ({ text: periodText(r.joined, r.left, r.ended), source: r.source })),
+    };
+  });
+  groups.sort((a, b) => cmpStr(a.earliest, b.earliest) || cmpStr(a.sortKey, b.sortKey));
+  return groups.map(({ entityId, periods }) => ({ entityId, periods }));
+}
+
+/** グループのメンバー（memberships を member_id で集約）。 */
+export function groupMembers(groupId: number): PeriodGroup[] {
+  const rows = query<MembershipRow>(
+    'SELECT id, group_id, member_id, joined, "left", ended, source FROM memberships WHERE group_id = ? ORDER BY member_id, joined, id',
+    groupId,
+  );
+  return aggregateMemberships(rows, (r) => r.member_id);
+}
+
+/** エンティティの所属（memberships を member_id=当該で逆引き、group_id で集約）。 */
+export function entityMemberships(entityId: number): PeriodGroup[] {
+  const rows = query<MembershipRow>(
+    'SELECT id, group_id, member_id, joined, "left", ended, source FROM memberships WHERE member_id = ? ORDER BY group_id, joined, id',
+    entityId,
+  );
+  return aggregateMemberships(rows, (r) => r.group_id);
+}
+
+/** グループの活動期間（group_activity_periods を active_from 昇順）。 */
+export function groupActivityPeriods(groupId: number): { text: string; source: string }[] {
+  const rows = query<{ active_from: string | null; active_to: string | null; ended: number; source: string }>(
+    'SELECT active_from, active_to, ended, source FROM group_activity_periods WHERE group_id = ? ORDER BY active_from, id',
+    groupId,
+  );
+  return rows.map((r) => ({ text: periodText(r.active_from, r.active_to, r.ended), source: r.source }));
+}
+
 /** role='director' の mv_credits を持つエンティティの重複なし導出（属性は保存しない・ビルド時クエリ）。 */
 export function directorEntities(): EntityRow[] {
   return query<EntityRow>(

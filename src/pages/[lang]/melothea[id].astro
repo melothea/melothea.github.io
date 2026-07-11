@@ -11,6 +11,7 @@ import {
   allEntities, getSong, getMv, mvDate, renderDisplayName,
   songArtists, songCredits, mvsOfSong, mvSongs, mvCredits, mvSongCreditGroups,
   mvMainArtists, artistMvsOf, entitySongRoles,
+  groupActivityPeriods, groupMembers, entityMemberships,
   mvCreditsOfEntity, entityTypeOf,
 } from '../../lib/entities.ts';
 import { renderCredit, type Rendered } from '../../lib/names.ts';
@@ -117,6 +118,12 @@ if (entity.entity_type === 'song') {
 }
 const shown = sections.filter((s) => s.lines.length > 0);
 
+// 活動期間facts（グループのみ）・メンバー節（グループのみ）・所属節（人物/グループ）。
+const isGroup = entity.entity_type === 'group';
+const activityPeriods = isGroup ? groupActivityPeriods(id) : [];
+const memberRows = isGroup ? groupMembers(id) : [];
+const membershipRows = entityMemberships(id);
+
 // entity 文脈のリンクも renderDisplayName で解決（MV は楽曲導出、それ以外は人物文脈）。
 const resolve = (ln: Line): Rendered =>
   ln.context === 'credit'
@@ -135,6 +142,16 @@ const other = otherLang(lang);
   <p class="kicker"><a href={langHome(lang)}>{SITE_NAME}</a> · melothea{id}</p>
   <h1 lang={heading.main.lang}>{heading.main.text}</h1>
   <p class="kicker">{typeLabel[lang][entity.entity_type]}</p>
+
+  {activityPeriods.length > 0 && (
+    <dl class="facts">
+      <dt>{L.activePeriod}</dt>
+      <dd>
+        {activityPeriods.map((p) => p.text).join(', ')}
+        {activityPeriods.map((p) => (<div class="src">{p.source}</div>))}
+      </dd>
+    </dl>
+  )}
 
   {facts.length > 0 && (
     <dl class="facts">
@@ -177,6 +194,40 @@ const other = otherLang(lang);
               <a href={langPath(lang, g.songId)} lang={r.main.lang}>{r.main.text}</a>{g.year != null && ` (${g.year})`}
               {' '}<span class="role">{roleTxt}</span>
               {g.roles.map((e) => (<div class="src">{e.source}</div>))}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  )}
+
+  {isGroup && memberRows.length > 0 && (
+    <section>
+      <h2>{L.members}</h2>
+      <ul class="rel">
+        {memberRows.map((m) => {
+          const r = renderDisplayName(m.entityId, entityTypeOf(m.entityId)!, lang);
+          return (
+            <li>
+              <a href={langPath(lang, m.entityId)} lang={r.main.lang}>{r.main.text}</a> ({m.periods.map((p) => p.text).join(', ')})
+              {m.periods.map((p) => (<div class="src">{p.source}</div>))}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  )}
+
+  {membershipRows.length > 0 && (
+    <section>
+      <h2>{L.membership}</h2>
+      <ul class="rel">
+        {membershipRows.map((m) => {
+          const r = renderDisplayName(m.entityId, entityTypeOf(m.entityId)!, lang);
+          return (
+            <li>
+              <a href={langPath(lang, m.entityId)} lang={r.main.lang}>{r.main.text}</a> ({m.periods.map((p) => p.text).join(', ')})
+              {m.periods.map((p) => (<div class="src">{p.source}</div>))}
             </li>
           );
         })}
