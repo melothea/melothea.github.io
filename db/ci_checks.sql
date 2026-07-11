@@ -137,6 +137,11 @@ SELECT 'group_period_order' AS check_name, id AS id,
 FROM groups
 WHERE begin_date IS NOT NULL AND end_date IS NOT NULL AND begin_date > end_date;
 
+SELECT 'group_activity_period_order' AS check_name, id AS id,
+       'active_from='||active_from||' > active_to='||active_to AS detail
+FROM group_activity_periods
+WHERE active_from IS NOT NULL AND active_to IS NOT NULL AND active_from > active_to;
+
 -- ============================================================
 -- 6b. ended 整合（終了日があるのに ended=0）
 --     終了日（valid_to／left／end_date）がNOT NULLなら終了済みのはずで ended=1 が整合。
@@ -157,6 +162,11 @@ SELECT 'group_ended_flag' AS check_name, id AS id,
        'end_date='||end_date||' but ended=0' AS detail
 FROM groups
 WHERE end_date IS NOT NULL AND ended = 0;
+
+SELECT 'group_activity_ended_flag' AS check_name, id AS id,
+       'active_to='||active_to||' but ended=0' AS detail
+FROM group_activity_periods
+WHERE active_to IS NOT NULL AND ended = 0;
 
 -- ============================================================
 -- 7. 語彙リスト照合（観測が増やす開いた語彙。設計側CHECKは張らずここで受ける）
@@ -251,10 +261,17 @@ FROM (
   WINDOW w AS (PARTITION BY mv_id, raw_text, source)
 ) WHERE c > 1 AND id <> first_id;
 
+SELECT 'dup_row_group_activity_periods' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM group_activity_periods
+  WINDOW w AS (PARTITION BY group_id, active_from, active_to, ended, source)
+) WHERE c > 1 AND id <> first_id;
+
 -- ============================================================
 -- 9. source記述規約の書式検査（2026/07/07確定。正本：MV_DATABASE.md「source記述規約」節）
---    source列を持つ全10表（names, memberships, song_artists, song_credits, mv_credits,
---    mv_songs, crew_raw, location_raw, song_artist_raw, mv_artist_raw）を対象に、
+--    source列を持つ全11表（names, memberships, song_artists, song_credits, mv_credits,
+--    mv_songs, crew_raw, location_raw, song_artist_raw, mv_artist_raw, group_activity_periods）を対象に、
 --    (a) 4形式のいずれにも適合しない行、(b) 禁止トークンを含む行、を違反として返す。
 --    有効化は既存行のバックフィル適用後（規約「CI書式検査」細則）。空表は0行で自明に通過する。
 --
@@ -282,6 +299,7 @@ FROM (
   UNION ALL SELECT 'location_raw', id, source FROM location_raw
   UNION ALL SELECT 'song_artist_raw', id, source FROM song_artist_raw
   UNION ALL SELECT 'mv_artist_raw', id, source FROM mv_artist_raw
+  UNION ALL SELECT 'group_activity_periods', id, source FROM group_activity_periods
 ) u
 WHERE NOT (
       u.source GLOB '*（確認 [0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]）*'
@@ -305,6 +323,7 @@ FROM (
   UNION ALL SELECT 'location_raw', id, source FROM location_raw
   UNION ALL SELECT 'song_artist_raw', id, source FROM song_artist_raw
   UNION ALL SELECT 'mv_artist_raw', id, source FROM mv_artist_raw
+  UNION ALL SELECT 'group_activity_periods', id, source FROM group_activity_periods
 ) u
 WHERE u.source LIKE '%依頼者%' OR u.source LIKE '%要確認%' OR u.source LIKE '%→%'
    OR u.source LIKE '%最終確認先%';
