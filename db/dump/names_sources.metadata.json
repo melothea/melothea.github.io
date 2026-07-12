@@ -1,0 +1,13 @@
+{
+    "name": "names_sources",
+    "columns": [
+        "id",
+        "parent_id",
+        "label",
+        "descriptor",
+        "url",
+        "referenced_at",
+        "record_ref"
+    ],
+    "schema": "CREATE TABLE names_sources (\n  id            INTEGER PRIMARY KEY,\n  parent_id     INTEGER NOT NULL REFERENCES names(id),\n  label         TEXT NOT NULL REFERENCES source_labels(label),\n  descriptor    TEXT,\n  url           TEXT,\n  referenced_at TEXT,\n  record_ref    TEXT,\n  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),\n  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)\n      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),\n  CHECK ((label = 'editor_verified' AND descriptor IS NULL)\n      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),\n  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)\n      OR (label <> 'editor_verified' AND record_ref IS NULL))\n)"
+}

@@ -4,8 +4,7 @@
         "id",
         "mv_id",
         "song_id",
-        "position",
-        "source"
+        "position"
     ],
-    "schema": "CREATE TABLE mv_songs (\n  id       INTEGER PRIMARY KEY,\n  mv_id    INTEGER NOT NULL REFERENCES mvs(id),\n  song_id  INTEGER NOT NULL REFERENCES songs(id),\n  position INTEGER NOT NULL,\n  source   TEXT NOT NULL\n)"
+    "schema": "CREATE TABLE mv_songs (\n  id       INTEGER PRIMARY KEY,\n  mv_id    INTEGER NOT NULL REFERENCES mvs(id),\n  song_id  INTEGER NOT NULL REFERENCES songs(id),\n  position INTEGER NOT NULL)"
 }

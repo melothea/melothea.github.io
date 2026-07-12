@@ -1,0 +1,8 @@
+{
+    "name": "source_labels",
+    "columns": [
+        "label",
+        "volatile"
+    ],
+    "schema": "CREATE TABLE source_labels (\n  label    TEXT PRIMARY KEY,\n  volatile INTEGER NOT NULL CHECK (volatile IN (0,1))\n)"
+}

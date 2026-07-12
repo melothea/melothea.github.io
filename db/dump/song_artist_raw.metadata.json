@@ -3,8 +3,7 @@
     "columns": [
         "id",
         "song_id",
-        "raw_text",
-        "source"
+        "raw_text"
     ],
-    "schema": "CREATE TABLE song_artist_raw (\n  id       INTEGER PRIMARY KEY,\n  song_id  INTEGER NOT NULL REFERENCES songs(id),\n  raw_text TEXT NOT NULL,\n  source   TEXT NOT NULL\n)"
+    "schema": "CREATE TABLE song_artist_raw (\n  id       INTEGER PRIMARY KEY,\n  song_id  INTEGER NOT NULL REFERENCES songs(id),\n  raw_text TEXT NOT NULL)"
 }

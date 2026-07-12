@@ -16,6 +16,45 @@ import {
 } from './db.ts';
 import { renderPerson, type Lang, type Rendered } from './names.ts';
 
+// ---- 出典（各親表の {親表名}_sources 子テーブル。1ソース1行）----
+
+export interface SourceEntry {
+  label: string;
+  descriptor: string | null;
+  url: string | null;
+  referencedAt: string | null;
+  recordRef: string | null;
+}
+
+/** 親行に紐づく出典行を投入順（id 昇順）で返す。childTable は内部固定の表名のみ。 */
+type SourceChildTable =
+  | 'names_sources'
+  | 'memberships_sources'
+  | 'group_activity_periods_sources'
+  | 'song_artists_sources'
+  | 'song_credits_sources'
+  | 'mv_credits_sources';
+
+export function sourcesFor(childTable: SourceChildTable, parentId: number): SourceEntry[] {
+  const rows = query<{
+    label: string;
+    descriptor: string | null;
+    url: string | null;
+    referenced_at: string | null;
+    record_ref: string | null;
+  }>(
+    `SELECT label, descriptor, url, referenced_at, record_ref FROM ${childTable} WHERE parent_id = ? ORDER BY id`,
+    parentId,
+  );
+  return rows.map((r) => ({
+    label: r.label,
+    descriptor: r.descriptor,
+    url: r.url,
+    referencedAt: r.referenced_at,
+    recordRef: r.record_ref,
+  }));
+}
+
 export function allEntities(): EntityRow[] {
   return query<EntityRow>('SELECT id, entity_type FROM entities ORDER BY id');
 }
@@ -122,11 +161,11 @@ export function mvMainArtists(mvId: number): SongArtistRow[] {
 }
 
 /** アーティストとして紐づく MV の逆引き：song_artists role='main' → mv_songs を JOIN し、
- *  当該エンティティが main アーティストの MV を mv_id で重複除去。source は帰属を担う
- *  song_artists 行のもの。featured は含めない。 */
-export function artistMvsOf(entityId: number): { mvId: number; source: string }[] {
-  const rows = query<{ mv_id: number; source: string }>(
-    `SELECT ms.mv_id AS mv_id, sa.source AS source
+ *  当該エンティティが main アーティストの MV を mv_id で重複除去。出典は帰属を担う
+ *  song_artists 行の子テーブル（song_artists_sources）から採る。featured は含めない。 */
+export function artistMvsOf(entityId: number): { mvId: number; sources: SourceEntry[] }[] {
+  const rows = query<{ mv_id: number; sa_id: number }>(
+    `SELECT ms.mv_id AS mv_id, sa.id AS sa_id
        FROM song_artists sa
        JOIN mv_songs ms ON ms.song_id = sa.song_id
       WHERE sa.entity_id = ? AND sa.role = 'main'
@@ -134,11 +173,11 @@ export function artistMvsOf(entityId: number): { mvId: number; source: string }[
     entityId,
   );
   const seen = new Set<number>();
-  const out: { mvId: number; source: string }[] = [];
+  const out: { mvId: number; sources: SourceEntry[] }[] = [];
   for (const r of rows) {
     if (!seen.has(r.mv_id)) {
       seen.add(r.mv_id);
-      out.push({ mvId: r.mv_id, source: r.source });
+      out.push({ mvId: r.mv_id, sources: sourcesFor('song_artists_sources', r.sa_id) });
     }
   }
   return out;
@@ -149,7 +188,7 @@ export function artistMvsOf(entityId: number): { mvId: number; source: string }[
  *  Artist系→作詞→作曲→編曲→プロデュース の規定順に整列し、楽曲は song_id 昇順で返す。 */
 export function entitySongRoles(
   entityId: number,
-): { songId: number; roles: { roleKey: string; source: string }[] }[] {
+): { songId: number; roles: { roleKey: string; sources: SourceEntry[] }[] }[] {
   const artist = query<SongArtistRow>(
     "SELECT * FROM song_artists WHERE entity_id = ? AND role = 'main' ORDER BY song_id, id",
     entityId,
@@ -163,14 +202,14 @@ export function entitySongRoles(
     const i = roleOrder.indexOf(k);
     return i < 0 ? roleOrder.length : i;
   };
-  const bySong = new Map<number, { roleKey: string; source: string }[]>();
-  const add = (songId: number, roleKey: string, source: string) => {
+  const bySong = new Map<number, { roleKey: string; sources: SourceEntry[] }[]>();
+  const add = (songId: number, roleKey: string, sources: SourceEntry[]) => {
     const list = bySong.get(songId) ?? [];
-    list.push({ roleKey, source });
+    list.push({ roleKey, sources });
     bySong.set(songId, list);
   };
-  for (const r of artist) add(r.song_id, r.role, r.source);
-  for (const r of credits) add(r.song_id, r.role, r.source);
+  for (const r of artist) add(r.song_id, r.role, sourcesFor('song_artists_sources', r.id));
+  for (const r of credits) add(r.song_id, r.role, sourcesFor('song_credits_sources', r.id));
   return [...bySong.keys()]
     .sort((a, b) => a - b)
     .map((songId) => ({
@@ -189,7 +228,6 @@ type MembershipRow = {
   joined: string | null;
   left: string | null;
   ended: number;
-  source: string;
 };
 
 /** 1区間の期間文字列。to=NULL は開区間（ended=0）のみ「YYYY–」。to=NULL かつ ended=1 は
@@ -219,7 +257,7 @@ const cmpStr = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 export interface PeriodGroup {
   entityId: number; // 相手（member_id または group_id）
-  periods: { text: string; source: string }[]; // joined 昇順
+  periods: { text: string; sources: SourceEntry[] }[]; // joined 昇順
 }
 
 /** memberships 行を「相手」で集約。並び：集約後の最古 joined 昇順、タイは entitySortKey の
@@ -238,7 +276,10 @@ function aggregateMemberships(rows: MembershipRow[], otherOf: (r: MembershipRow)
       entityId,
       earliest: sorted[0]?.joined ?? '',
       sortKey: entitySortKey(entityId),
-      periods: sorted.map((r) => ({ text: periodText(r.joined, r.left, r.ended), source: r.source })),
+      periods: sorted.map((r) => ({
+        text: periodText(r.joined, r.left, r.ended),
+        sources: sourcesFor('memberships_sources', r.id),
+      })),
     };
   });
   groups.sort((a, b) => cmpStr(a.earliest, b.earliest) || cmpStr(a.sortKey, b.sortKey));
@@ -248,7 +289,7 @@ function aggregateMemberships(rows: MembershipRow[], otherOf: (r: MembershipRow)
 /** グループのメンバー（memberships を member_id で集約）。 */
 export function groupMembers(groupId: number): PeriodGroup[] {
   const rows = query<MembershipRow>(
-    'SELECT id, group_id, member_id, joined, "left", ended, source FROM memberships WHERE group_id = ? ORDER BY member_id, joined, id',
+    'SELECT id, group_id, member_id, joined, "left", ended FROM memberships WHERE group_id = ? ORDER BY member_id, joined, id',
     groupId,
   );
   return aggregateMemberships(rows, (r) => r.member_id);
@@ -257,19 +298,22 @@ export function groupMembers(groupId: number): PeriodGroup[] {
 /** エンティティの所属（memberships を member_id=当該で逆引き、group_id で集約）。 */
 export function entityMemberships(entityId: number): PeriodGroup[] {
   const rows = query<MembershipRow>(
-    'SELECT id, group_id, member_id, joined, "left", ended, source FROM memberships WHERE member_id = ? ORDER BY group_id, joined, id',
+    'SELECT id, group_id, member_id, joined, "left", ended FROM memberships WHERE member_id = ? ORDER BY group_id, joined, id',
     entityId,
   );
   return aggregateMemberships(rows, (r) => r.group_id);
 }
 
 /** グループの活動期間（group_activity_periods を active_from 昇順）。 */
-export function groupActivityPeriods(groupId: number): { text: string; source: string }[] {
-  const rows = query<{ active_from: string | null; active_to: string | null; ended: number; source: string }>(
-    'SELECT active_from, active_to, ended, source FROM group_activity_periods WHERE group_id = ? ORDER BY active_from, id',
+export function groupActivityPeriods(groupId: number): { text: string; sources: SourceEntry[] }[] {
+  const rows = query<{ id: number; active_from: string | null; active_to: string | null; ended: number }>(
+    'SELECT id, active_from, active_to, ended FROM group_activity_periods WHERE group_id = ? ORDER BY active_from, id',
     groupId,
   );
-  return rows.map((r) => ({ text: periodText(r.active_from, r.active_to, r.ended), source: r.source }));
+  return rows.map((r) => ({
+    text: periodText(r.active_from, r.active_to, r.ended),
+    sources: sourcesFor('group_activity_periods_sources', r.id),
+  }));
 }
 
 /** role='director' の mv_credits を持つエンティティの重複なし導出（属性は保存しない・ビルド時クエリ）。 */

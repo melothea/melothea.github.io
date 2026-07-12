@@ -9,11 +9,16 @@
 --   sqlite3 <db> "PRAGMA foreign_keys=ON;" ".read db/ci_checks.sql"
 --   出力が1行でもあればビルド失敗（呼び出し側で判定）。
 --
--- 検査対象9項目：
---   1 name_type × entity_type / 2 memberships.member型 / 3 credits二表の参加者型 /
---   4 出演個人原則 / 5 derives_from 非循環・同一entity内 / 6 期間の正気度 /
---   7 mv_credits.role・video_type の語彙リスト照合 / 8 完全重複行（二重投入検出） /
---   9 source記述規約の書式検査（4形式適合・禁止トークン不在）
+-- 検査対象：
+--   0 サブタイプ×entity_type / 1 name_type × entity_type（title は楽曲＋被参照MVのみ）/
+--   2 memberships.member型 / 3 credits二表の参加者型 / 4 出演個人原則 /
+--   5 derives_from 非循環・同一entity内 / 6 期間の正気度 /
+--   7 mv_credits.role・video_type の語彙リスト照合 / 8 完全重複行（親表・出典子表の二重投入検出） /
+--   9 出典層の整合：
+--     (a) 子テーブル対象10表の各行に対応する出典子テーブル行が1件以上（mv_songs は対象外）
+--     (b) source_labels の volatile=0 のラベル集合が {'disc','video_disc'} と一致
+--     (d) mvs.title_name_id の参照先 names が当該MV自身の title 行であること
+--   ※旧「source記述規約の書式検査」は出典層への移行完了に伴い撤去。
 
 -- ============================================================
 -- 0. サブタイプ表 × entity_type の照合
@@ -38,7 +43,9 @@ FROM (
 
 -- ============================================================
 -- 1. name_type × entity_type
---    対応表：act_name＝person/group ／ legal_name＝person ／ title＝song
+--    対応表：act_name＝person/group ／ legal_name＝person ／
+--            title＝楽曲、および mvs.title_name_id から参照されるMV
+--            （MVの title 行で被参照でないものは違反）
 -- ============================================================
 SELECT 'name_type_x_entity_type' AS check_name, n.id AS id,
        'name_type='||n.name_type||' entity_type='||e.entity_type||' name='||n.name_text AS detail
@@ -48,6 +55,8 @@ WHERE NOT (
       (n.name_type = 'act_name'   AND e.entity_type IN ('person','group'))
    OR (n.name_type = 'legal_name' AND e.entity_type = 'person')
    OR (n.name_type = 'title'      AND e.entity_type = 'song')
+   OR (n.name_type = 'title'      AND e.entity_type = 'mv'
+        AND n.id IN (SELECT title_name_id FROM mvs WHERE title_name_id IS NOT NULL))
 );
 
 -- ============================================================
@@ -184,10 +193,10 @@ WHERE video_type IS NOT NULL AND video_type NOT IN ('music_video');
 -- ============================================================
 -- 8. 完全重複行の検出（id以外の全列一致＝二重投入ミス。近似重複は対象外）
 --    各表で全非id列をPARTITIONし、最小id以外を違反として返す。
---    対象は関係テーブル・生記述層・names のみ。エンティティ表（entities/people/groups/songs/mvs）は
---    除外する：draft段階の別エンティティが全列一致し得る（例：属性未入力のpeople行が複数）ため、
---    完全一致を二重投入と断じると正当な別人・別作品を誤検出する。エンティティの重複はid（公開ID）で
---    区別され、内容一致は重複の証拠にならない。
+--    対象は関係テーブル・生記述層・names と、出典子テーブル10枚。エンティティ表
+--    （entities/people/groups/songs/mvs）は除外する：draft段階の別エンティティが全列一致し得る
+--    （例：属性未入力のpeople行が複数）ため、完全一致を二重投入と断じると正当な別人・別作品を
+--    誤検出する。エンティティの重複はid（公開ID）で区別され、内容一致は重複の証拠にならない。
 -- ============================================================
 SELECT 'dup_row_names' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
@@ -195,135 +204,204 @@ FROM (
          MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM names
   WINDOW w AS (PARTITION BY entity_id, name_text, lang, locale, is_primary, name_type,
-                            origin, reading, derives_from_name_id, valid_from, valid_to, ended, source)
+                            origin, reading, derives_from_name_id, valid_from, valid_to, ended)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_memberships' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM memberships
-  WINDOW w AS (PARTITION BY group_id, member_id, joined, "left", ended, source)
+  WINDOW w AS (PARTITION BY group_id, member_id, joined, "left", ended)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_song_artists' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM song_artists
-  WINDOW w AS (PARTITION BY song_id, entity_id, role, credited_name_id, source)
+  WINDOW w AS (PARTITION BY song_id, entity_id, role, credited_name_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_song_credits' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM song_credits
-  WINDOW w AS (PARTITION BY song_id, entity_id, role, credited_name_id, source)
+  WINDOW w AS (PARTITION BY song_id, entity_id, role, credited_name_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_mv_credits' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM mv_credits
-  WINDOW w AS (PARTITION BY mv_id, entity_id, role, credited_name_id, source)
+  WINDOW w AS (PARTITION BY mv_id, entity_id, role, credited_name_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_mv_songs' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM mv_songs
-  WINDOW w AS (PARTITION BY mv_id, song_id, position, source)
+  WINDOW w AS (PARTITION BY mv_id, song_id, position)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_crew_raw' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM crew_raw
-  WINDOW w AS (PARTITION BY mv_id, raw_text, source, person_id)
+  WINDOW w AS (PARTITION BY mv_id, raw_text, person_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_location_raw' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM location_raw
-  WINDOW w AS (PARTITION BY mv_id, raw_text, source, external_id)
+  WINDOW w AS (PARTITION BY mv_id, raw_text, external_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_song_artist_raw' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM song_artist_raw
-  WINDOW w AS (PARTITION BY song_id, raw_text, source)
+  WINDOW w AS (PARTITION BY song_id, raw_text)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_mv_artist_raw' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM mv_artist_raw
-  WINDOW w AS (PARTITION BY mv_id, raw_text, source)
+  WINDOW w AS (PARTITION BY mv_id, raw_text)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_group_activity_periods' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM group_activity_periods
-  WINDOW w AS (PARTITION BY group_id, active_from, active_to, ended, source)
+  WINDOW w AS (PARTITION BY group_id, active_from, active_to, ended)
+) WHERE c > 1 AND id <> first_id;
+
+-- --- 8b. 出典子テーブル10枚の完全重複行（parent_id含む全非id列一致＝二重投入） ---
+--    同一親行に複数出典（1ソース1行）は正当。全列一致のみを重複とみなす。
+SELECT 'dup_row_names_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM names_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+) WHERE c > 1 AND id <> first_id;
+
+SELECT 'dup_row_memberships_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM memberships_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+) WHERE c > 1 AND id <> first_id;
+
+SELECT 'dup_row_group_activity_periods_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM group_activity_periods_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+) WHERE c > 1 AND id <> first_id;
+
+SELECT 'dup_row_song_artists_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM song_artists_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+) WHERE c > 1 AND id <> first_id;
+
+SELECT 'dup_row_song_credits_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM song_credits_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+) WHERE c > 1 AND id <> first_id;
+
+SELECT 'dup_row_mv_credits_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM mv_credits_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+) WHERE c > 1 AND id <> first_id;
+
+SELECT 'dup_row_crew_raw_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM crew_raw_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+) WHERE c > 1 AND id <> first_id;
+
+SELECT 'dup_row_location_raw_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM location_raw_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+) WHERE c > 1 AND id <> first_id;
+
+SELECT 'dup_row_song_artist_raw_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM song_artist_raw_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+) WHERE c > 1 AND id <> first_id;
+
+SELECT 'dup_row_mv_artist_raw_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM mv_artist_raw_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
 ) WHERE c > 1 AND id <> first_id;
 
 -- ============================================================
--- 9. source記述規約の書式検査（2026/07/07確定。正本：MV_DATABASE.md「source記述規約」節）
---    source列を持つ全11表（names, memberships, song_artists, song_credits, mv_credits,
---    mv_songs, crew_raw, location_raw, song_artist_raw, mv_artist_raw, group_activity_periods）を対象に、
---    (a) 4形式のいずれにも適合しない行、(b) 禁止トークンを含む行、を違反として返す。
---    有効化は既存行のバックフィル適用後（規約「CI書式検査」細則）。空表は0行で自明に通過する。
---
---    4形式（日付はゼロ埋めYYYY/MM/DD。B・C・DはマーカーをGLOBの[0-9]クラスで検査）：
---      A 一次未確認：B・C・Dマーカーを含まない非空の出典列挙
---      B 一次確認済：「（確認 YYYY/MM/DD）」を含む
---      C 編纂者観察：「（編纂者確認 YYYY/MM/DD）」を含む
---      D 典拠非公開：「（典拠非公開 YYYY/MM/DD、記録R-」を含む
---    形式Aはマーカー接頭辞（（確認 ／（編纂者確認 ／（典拠非公開 ）を含まない非空文字列。
---    これによりマーカーはあるが日付がゼロ埋めでない・不完全な行はB/C/D GLOBに外れ、
---    かつA枝のNOT LIKEに阻まれて違反として捕捉される。旧形式A句（；最終確認先：…（未確認））の
---    残存はA枝を通過するため source_forbidden_token（最終確認先）側で捕捉する。
---    禁止トークン：依頼者 / 要確認 / → / 最終確認先
---    id は表をまたいで衝突するため detail に表名を含めて自己識別させる。
+-- 9. 出典層の整合（旧 source 記述規約の書式検査の後継。source列撤去に伴い差し替え）
 -- ============================================================
-SELECT 'source_format' AS check_name, u.id AS id, u.tbl||' source='||u.source AS detail
-FROM (
-  SELECT 'names' AS tbl, id, source FROM names
-  UNION ALL SELECT 'memberships', id, source FROM memberships
-  UNION ALL SELECT 'song_artists', id, source FROM song_artists
-  UNION ALL SELECT 'song_credits', id, source FROM song_credits
-  UNION ALL SELECT 'mv_credits', id, source FROM mv_credits
-  UNION ALL SELECT 'mv_songs', id, source FROM mv_songs
-  UNION ALL SELECT 'crew_raw', id, source FROM crew_raw
-  UNION ALL SELECT 'location_raw', id, source FROM location_raw
-  UNION ALL SELECT 'song_artist_raw', id, source FROM song_artist_raw
-  UNION ALL SELECT 'mv_artist_raw', id, source FROM mv_artist_raw
-  UNION ALL SELECT 'group_activity_periods', id, source FROM group_activity_periods
-) u
-WHERE NOT (
-      u.source GLOB '*（確認 [0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]）*'
-   OR u.source GLOB '*（編纂者確認 [0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]）*'
-   OR u.source GLOB '*（典拠非公開 [0-9][0-9][0-9][0-9]/[0-9][0-9]/[0-9][0-9]、記録R-*'
-   OR ( u.source <> ''
-        AND u.source NOT LIKE '%（確認 %'
-        AND u.source NOT LIKE '%（編纂者確認 %'
-        AND u.source NOT LIKE '%（典拠非公開 %' )
-);
 
-SELECT 'source_forbidden_token' AS check_name, u.id AS id, u.tbl||' source='||u.source AS detail
-FROM (
-  SELECT 'names' AS tbl, id, source FROM names
-  UNION ALL SELECT 'memberships', id, source FROM memberships
-  UNION ALL SELECT 'song_artists', id, source FROM song_artists
-  UNION ALL SELECT 'song_credits', id, source FROM song_credits
-  UNION ALL SELECT 'mv_credits', id, source FROM mv_credits
-  UNION ALL SELECT 'mv_songs', id, source FROM mv_songs
-  UNION ALL SELECT 'crew_raw', id, source FROM crew_raw
-  UNION ALL SELECT 'location_raw', id, source FROM location_raw
-  UNION ALL SELECT 'song_artist_raw', id, source FROM song_artist_raw
-  UNION ALL SELECT 'mv_artist_raw', id, source FROM mv_artist_raw
-  UNION ALL SELECT 'group_activity_periods', id, source FROM group_activity_periods
-) u
-WHERE u.source LIKE '%依頼者%' OR u.source LIKE '%要確認%' OR u.source LIKE '%→%'
-   OR u.source LIKE '%最終確認先%';
+-- (a) 子テーブル対象10表の各行に、対応する出典子テーブル行が1件以上存在すること。
+--     mv_songs は出典子テーブルを持たない（対象外）。親行に出典が1件も無ければ違反。
+SELECT 'missing_source_names' AS check_name, n.id AS id, 'no names_sources row' AS detail
+FROM names n WHERE NOT EXISTS (SELECT 1 FROM names_sources s WHERE s.parent_id = n.id);
+
+SELECT 'missing_source_memberships' AS check_name, m.id AS id, 'no memberships_sources row' AS detail
+FROM memberships m WHERE NOT EXISTS (SELECT 1 FROM memberships_sources s WHERE s.parent_id = m.id);
+
+SELECT 'missing_source_group_activity_periods' AS check_name, g.id AS id, 'no group_activity_periods_sources row' AS detail
+FROM group_activity_periods g WHERE NOT EXISTS (SELECT 1 FROM group_activity_periods_sources s WHERE s.parent_id = g.id);
+
+SELECT 'missing_source_song_artists' AS check_name, a.id AS id, 'no song_artists_sources row' AS detail
+FROM song_artists a WHERE NOT EXISTS (SELECT 1 FROM song_artists_sources s WHERE s.parent_id = a.id);
+
+SELECT 'missing_source_song_credits' AS check_name, c.id AS id, 'no song_credits_sources row' AS detail
+FROM song_credits c WHERE NOT EXISTS (SELECT 1 FROM song_credits_sources s WHERE s.parent_id = c.id);
+
+SELECT 'missing_source_mv_credits' AS check_name, c.id AS id, 'no mv_credits_sources row' AS detail
+FROM mv_credits c WHERE NOT EXISTS (SELECT 1 FROM mv_credits_sources s WHERE s.parent_id = c.id);
+
+SELECT 'missing_source_crew_raw' AS check_name, r.id AS id, 'no crew_raw_sources row' AS detail
+FROM crew_raw r WHERE NOT EXISTS (SELECT 1 FROM crew_raw_sources s WHERE s.parent_id = r.id);
+
+SELECT 'missing_source_location_raw' AS check_name, r.id AS id, 'no location_raw_sources row' AS detail
+FROM location_raw r WHERE NOT EXISTS (SELECT 1 FROM location_raw_sources s WHERE s.parent_id = r.id);
+
+SELECT 'missing_source_song_artist_raw' AS check_name, r.id AS id, 'no song_artist_raw_sources row' AS detail
+FROM song_artist_raw r WHERE NOT EXISTS (SELECT 1 FROM song_artist_raw_sources s WHERE s.parent_id = r.id);
+
+SELECT 'missing_source_mv_artist_raw' AS check_name, r.id AS id, 'no mv_artist_raw_sources row' AS detail
+FROM mv_artist_raw r WHERE NOT EXISTS (SELECT 1 FROM mv_artist_raw_sources s WHERE s.parent_id = r.id);
+
+-- (b) source_labels の volatile=0（固定資料）のラベル集合が {'disc','video_disc'} と一致すること。
+--     固定資料ラベルを増やした場合は下記の検査集合も同時に更新する。
+--     集合差（余分な volatile=0／不足）があれば1行返す。
+SELECT 'volatile_zero_label_set' AS check_name, 0 AS id,
+       'volatile=0 set='||COALESCE((SELECT group_concat(label, ',')
+                                    FROM (SELECT label FROM source_labels WHERE volatile = 0 ORDER BY label)),
+                                   '(empty)')||' expected=disc,video_disc' AS detail
+WHERE EXISTS (SELECT 1 FROM source_labels WHERE volatile = 0 AND label NOT IN ('disc','video_disc'))
+   OR EXISTS (SELECT 1 FROM source_labels WHERE label IN ('disc','video_disc') AND (volatile <> 0 OR volatile IS NULL))
+   OR (SELECT count(*) FROM source_labels WHERE volatile = 0) <> 2;
+
+-- (d) mvs.title_name_id が非NULLなら、参照先 names 行の entity_id が当該MV自身であり
+--     name_type='title' であること。
+SELECT 'title_name_id_integrity' AS check_name, m.id AS id,
+       'title_name_id='||m.title_name_id||' -> name entity='||n.entity_id
+       ||' name_type='||n.name_type AS detail
+FROM mvs m
+JOIN names n ON n.id = m.title_name_id
+WHERE m.title_name_id IS NOT NULL
+  AND (n.entity_id <> m.id OR n.name_type <> 'title');

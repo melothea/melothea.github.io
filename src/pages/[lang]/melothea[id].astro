@@ -7,12 +7,13 @@
 // 本スライスは全名義 locale=ja・reading=NULL のため、ja ページは確立形（ja primary）ヒット、
 // en ページは逐語（lang=ja）＋リンクに劣化する（設計どおり）。
 import Base from '../../layouts/Base.astro';
+import SourceList from '../../components/SourceList.astro';
 import {
   allEntities, getSong, getMv, mvDate, renderDisplayName,
   songArtists, songCredits, mvsOfSong, mvSongs, mvCredits, mvSongCreditGroups,
   mvMainArtists, artistMvsOf, entitySongRoles,
   groupActivityPeriods, groupMembers, entityMemberships,
-  mvCreditsOfEntity, entityTypeOf,
+  mvCreditsOfEntity, entityTypeOf, sourcesFor, type SourceEntry,
 } from '../../lib/entities.ts';
 import { renderCredit, type Rendered } from '../../lib/names.ts';
 import {
@@ -35,7 +36,7 @@ const L = ui[lang];
 type Line = {
   roleKey: string;
   targetId: number;
-  source: string;
+  sources: SourceEntry[];
   context: 'credit' | 'entity';
   creditedNameId?: number | null;
   atDate?: string | null;
@@ -45,7 +46,7 @@ type Section = { title: string; titleLang?: string; level?: 2 | 3; lines: Line[]
 const sections: Section[] = [];
 const facts: { label: string; value: string }[] = [];
 // person/group の「楽曲（Songs）」節：楽曲ごとに main アーティスト＋作家クレジットを集約
-const songRoleGroups: { songId: number; year: number | null; roles: { roleKey: string; source: string }[] }[] = [];
+const songRoleGroups: { songId: number; year: number | null; roles: { roleKey: string; sources: SourceEntry[] }[] }[] = [];
 
 // 見出し（MV は楽曲タイトルから導出。それ以外は人物文脈）
 const heading = renderDisplayName(id, entity.entity_type, lang);
@@ -55,15 +56,15 @@ if (entity.entity_type === 'song') {
   if (s?.release_year != null) facts.push({ label: L.releaseYear, value: String(s.release_year) });
   sections.push({
     title: L.artists,
-    lines: songArtists(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source, context: 'credit', creditedNameId: r.credited_name_id, atDate: null })),
+    lines: songArtists(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('song_artists_sources', r.id), context: 'credit', creditedNameId: r.credited_name_id, atDate: null })),
   });
   sections.push({
     title: L.songCredits,
-    lines: songCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source, context: 'credit', creditedNameId: r.credited_name_id, atDate: null })),
+    lines: songCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('song_credits_sources', r.id), context: 'credit', creditedNameId: r.credited_name_id, atDate: null })),
   });
   sections.push({
     title: L.appearsIn,
-    lines: mvsOfSong(id).map((r) => ({ roleKey: 'mv', targetId: r.mv_id, source: r.source, context: 'entity' })),
+    lines: mvsOfSong(id).map((r) => ({ roleKey: 'mv', targetId: r.mv_id, sources: [], context: 'entity' })),
   });
 } else if (entity.entity_type === 'mv') {
   const m = getMv(id);
@@ -74,19 +75,19 @@ if (entity.entity_type === 'song') {
   // 表示名はクレジット文脈（renderCredit・atDate=MVの日付）でページ言語のカスケード解決。
   sections.push({
     title: L.artists,
-    lines: mvMainArtists(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source, context: 'credit', creditedNameId: r.credited_name_id, atDate: at })),
+    lines: mvMainArtists(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('song_artists_sources', r.id), context: 'credit', creditedNameId: r.credited_name_id, atDate: at })),
   });
   sections.push({
     title: L.songs,
-    lines: mvSongs(id).map((r) => ({ roleKey: 'song', targetId: r.song_id, source: r.source, context: 'entity' })),
+    lines: mvSongs(id).map((r) => ({ roleKey: 'song', targetId: r.song_id, sources: [], context: 'entity' })),
   });
   // クレジット欄：MVクレジット（監督・出演）に、mv_songs 経由の楽曲クレジット（作詞・作曲・編曲）を
   // クレジット文脈（renderCredit・atDate=MVの日付）で統合。単曲MVは1欄に統合、複数楽曲（メドレー）は
   // 楽曲ごとに小見出し（level 3）で分ける。楽曲行そのものへのリンクは上の「楽曲」節で残す。
   const songGroups = mvSongCreditGroups(id);
-  const mvCreditLines: Line[] = mvCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, source: r.source, context: 'credit', creditedNameId: r.credited_name_id, atDate: at }));
-  const songCreditLine = (c: { role: string; entity_id: number; source: string; credited_name_id: number | null }): Line =>
-    ({ roleKey: c.role, targetId: c.entity_id, source: c.source, context: 'credit', creditedNameId: c.credited_name_id, atDate: at });
+  const mvCreditLines: Line[] = mvCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('mv_credits_sources', r.id), context: 'credit', creditedNameId: r.credited_name_id, atDate: at }));
+  const songCreditLine = (c: { id: number; role: string; entity_id: number; credited_name_id: number | null }): Line =>
+    ({ roleKey: c.role, targetId: c.entity_id, sources: sourcesFor('song_credits_sources', c.id), context: 'credit', creditedNameId: c.credited_name_id, atDate: at });
   if (songGroups.length <= 1) {
     sections.push({
       title: L.credits,
@@ -106,8 +107,8 @@ if (entity.entity_type === 'song') {
   sections.push({
     title: L.mvWork,
     lines: [
-      ...mvCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.mv_id, source: r.source, context: 'entity' as const, year: getMv(r.mv_id)?.production_year ?? null })),
-      ...artistMvsOf(id).map((r) => ({ roleKey: 'main', targetId: r.mvId, source: r.source, context: 'entity' as const, year: getMv(r.mvId)?.production_year ?? null })),
+      ...mvCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.mv_id, sources: sourcesFor('mv_credits_sources', r.id), context: 'entity' as const, year: getMv(r.mv_id)?.production_year ?? null })),
+      ...artistMvsOf(id).map((r) => ({ roleKey: 'main', targetId: r.mvId, sources: r.sources, context: 'entity' as const, year: getMv(r.mvId)?.production_year ?? null })),
     ],
   });
   // 節2 楽曲（Songs）：song_artists(main)＋song_credits(全role)を楽曲ごとに集約（旧 As artist／
@@ -148,7 +149,7 @@ const other = otherLang(lang);
       <dt>{L.activePeriod}</dt>
       <dd>
         {activityPeriods.map((p) => p.text).join(', ')}
-        <details class="srcbox"><summary>{L.sources}</summary>{activityPeriods.map((p) => (<div class="src">{p.source}</div>))}</details>
+        {activityPeriods.map((p) => (<SourceList sources={p.sources} summary={L.sources} verifiedLabel={L.editorVerified} />))}
       </dd>
     </dl>
   )}
@@ -174,7 +175,7 @@ const other = otherLang(lang);
               <span class="role">{roleTxt}</span>
               <a href={langPath(lang, ln.targetId)} lang={r.main.lang}>{r.main.text}</a>{ln.year != null && ` (${ln.year})`}
               {r.sub && <span class="sub"> 〈<span lang={r.sub.lang}>{r.sub.text}</span>〉</span>}
-              <details class="srcbox"><summary>{L.sources}</summary><div class="src">{ln.source}</div></details>
+              <SourceList sources={ln.sources} summary={L.sources} verifiedLabel={L.editorVerified} />
             </li>
           );
         })}
@@ -193,7 +194,7 @@ const other = otherLang(lang);
             <li>
               <a href={langPath(lang, g.songId)} lang={r.main.lang}>{r.main.text}</a>{g.year != null && ` (${g.year})`}
               {' '}<span class="role">{roleTxt}</span>
-              <details class="srcbox"><summary>{L.sources}</summary>{g.roles.map((e) => (<div class="src">{e.source}</div>))}</details>
+              {g.roles.map((e) => (<SourceList sources={e.sources} summary={L.sources} verifiedLabel={L.editorVerified} />))}
             </li>
           );
         })}
@@ -210,7 +211,7 @@ const other = otherLang(lang);
           return (
             <li>
               <a href={langPath(lang, m.entityId)} lang={r.main.lang}>{r.main.text}</a> ({m.periods.map((p) => p.text).join(', ')})
-              <details class="srcbox"><summary>{L.sources}</summary>{m.periods.map((p) => (<div class="src">{p.source}</div>))}</details>
+              {m.periods.map((p) => (<SourceList sources={p.sources} summary={L.sources} verifiedLabel={L.editorVerified} />))}
             </li>
           );
         })}
@@ -227,7 +228,7 @@ const other = otherLang(lang);
           return (
             <li>
               <a href={langPath(lang, m.entityId)} lang={r.main.lang}>{r.main.text}</a> ({m.periods.map((p) => p.text).join(', ')})
-              <details class="srcbox"><summary>{L.sources}</summary>{m.periods.map((p) => (<div class="src">{p.source}</div>))}</details>
+              {m.periods.map((p) => (<SourceList sources={p.sources} summary={L.sources} verifiedLabel={L.editorVerified} />))}
             </li>
           );
         })}

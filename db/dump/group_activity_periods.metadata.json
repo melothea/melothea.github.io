@@ -5,8 +5,7 @@
         "group_id",
         "active_from",
         "active_to",
-        "ended",
-        "source"
+        "ended"
     ],
-    "schema": "CREATE TABLE group_activity_periods (\n  id          INTEGER PRIMARY KEY,\n  group_id    INTEGER NOT NULL REFERENCES groups(id),\n  active_from TEXT,\n  active_to   TEXT,\n  ended       INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0,1)),\n  source      TEXT NOT NULL\n)"
+    "schema": "CREATE TABLE group_activity_periods (\n  id          INTEGER PRIMARY KEY,\n  group_id    INTEGER NOT NULL REFERENCES groups(id),\n  active_from TEXT,\n  active_to   TEXT,\n  ended       INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0,1)))"
 }

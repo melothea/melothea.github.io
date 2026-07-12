@@ -48,7 +48,6 @@ export interface NameRow {
   valid_from: string | null;
   valid_to: string | null;
   ended: number;
-  source: string;
 }
 
 export interface SongRow {
@@ -70,7 +69,6 @@ export interface SongArtistRow {
   entity_id: number;
   role: 'main' | 'featured';
   credited_name_id: number | null;
-  source: string;
 }
 
 export interface SongCreditRow {
@@ -79,7 +77,6 @@ export interface SongCreditRow {
   entity_id: number;
   role: 'lyricist' | 'composer' | 'arranger' | 'producer';
   credited_name_id: number | null;
-  source: string;
 }
 
 export interface MvCreditRow {
@@ -88,7 +85,6 @@ export interface MvCreditRow {
   entity_id: number;
   role: string; // 開いた語彙（CI検証で照合）
   credited_name_id: number | null;
-  source: string;
 }
 
 export interface MvSongRow {
@@ -96,5 +92,4 @@ export interface MvSongRow {
   mv_id: number;
   song_id: number;
   position: number;
-  source: string;
 }
