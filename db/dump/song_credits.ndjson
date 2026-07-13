@@ -6,3 +6,6 @@
 [6, 9, 7, "arranger", null]
 [7, 10, 1, "lyricist", null]
 [8, 10, 2, "composer", null]
+[9, 16, 2, "lyricist", null]
+[10, 16, 4, "composer", null]
+[11, 16, 7, "arranger", null]
