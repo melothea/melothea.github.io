@@ -149,7 +149,7 @@ export function renderCredit(
     : { text: `melothea${entityId}`, lang };
 
   // 2段目：同一系列の確立形のみ採用（系列不一致は採用せず次段へ）。
-  const est = verbatimRow ? establishedInSeries(entityId, lang, verbatimRow.id) : undefined;
+  const est = localePrimary(entityId, lang);
   if (est) {
     const sub = est.name_text !== verbatim.text ? verbatim : undefined;
     return { main: { text: est.name_text, lang: est.lang }, sub, degraded: false, linkId: entityId };
