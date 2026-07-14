@@ -2,12 +2,11 @@
     "name": "songs",
     "columns": [
         "id",
-        "release_year",
         "status",
         "description",
         "description_source",
         "wikidata_qid",
         "mbid"
     ],
-    "schema": "CREATE TABLE songs (\n  id                 INTEGER PRIMARY KEY REFERENCES entities(id),\n  release_year       INTEGER,                          -- \u30ea\u30ea\u30fc\u30b9\u5e74\u306f\u697d\u66f2\u5074\n  status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),\n  description        TEXT,\n  description_source TEXT CHECK (description_source IN ('ai','manual','ai_edited')),\n  wikidata_qid       TEXT,\n  mbid               TEXT,\n  CHECK (description IS NOT NULL OR description_source IS NULL)\n)"
+    "schema": "CREATE TABLE \"songs\" (\n  id                 INTEGER PRIMARY KEY REFERENCES entities(id),\n  status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),\n  description        TEXT,\n  description_source TEXT CHECK (description_source IN ('ai','manual','ai_edited')),\n  wikidata_qid       TEXT,\n  mbid               TEXT,\n  CHECK (description IS NOT NULL OR description_source IS NULL)\n)"
 }

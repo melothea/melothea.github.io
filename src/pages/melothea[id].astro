@@ -4,7 +4,7 @@
 // ja/en の各言語ページへ導く。hreflang の x-default 受け皿を兼ねる。
 import Base from '../layouts/Base.astro';
 import SourceList from '../components/SourceList.astro';
-import { allEntities, getSong, getVideo, neutralName,
+import { allEntities, getVideo, neutralName, songYear, videoYear,
   songArtists, songCredits, videosOfSong, videoSongs, videoCredits, videoSongCreditGroups,
   videoCreditsOfEntity, songCreditsOfEntity, songArtistOf, entityTypeOf,
   sourcesFor, type SourceEntry } from '../lib/entities.ts';
@@ -25,8 +25,8 @@ const facts: { label: string; value: string; lang?: string }[] = [];
 
 // --- 種別ごとの事実と関係を収集 ---
 if (entity.entity_type === 'song') {
-  const s = getSong(id);
-  if (s?.release_year != null) facts.push({ label: bi('リリース年', 'Release year'), value: String(s.release_year) });
+  const sy = songYear(id);
+  if (sy != null) facts.push({ label: bi('リリース年', 'Release year'), value: sy });
   sections.push({
     title: bi('アーティスト', 'Artists'),
     lines: songArtists(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('song_artists_sources', r.id) })),
@@ -41,7 +41,8 @@ if (entity.entity_type === 'song') {
   });
 } else if (entity.entity_type === 'video') {
   const m = getVideo(id);
-  if (m?.production_year != null) facts.push({ label: bi('制作年', 'Production year'), value: String(m.production_year) });
+  const vy = videoYear(id);
+  if (vy != null) facts.push({ label: bi('制作年', 'Production year'), value: vy });
   if (m?.video_type) facts.push({ label: bi('種別', 'Type'), value: m.video_type });
   sections.push({
     title: bi('楽曲', 'Songs'),

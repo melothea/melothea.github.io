@@ -49,14 +49,12 @@ export interface NameRow {
 
 export interface SongRow {
   id: number;
-  release_year: number | null;
   status: string;
 }
 
 export interface VideoRow {
   id: number;
   video_type: string | null;
-  production_year: number | null;
   status: string;
 }
 

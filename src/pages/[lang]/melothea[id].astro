@@ -7,7 +7,7 @@
 import Base from '../../layouts/Base.astro';
 import SourceList from '../../components/SourceList.astro';
 import {
-  allEntities, getSong, getVideo, videoDate, renderDisplayName,
+  allEntities, getVideo, songYear, videoYear, renderDisplayName,
   songArtists, songCredits, videosOfSong, videoSongs, videoCredits, videoSongCreditGroups,
   videoMainArtists, artistVideosOf, entitySongRoles,
   groupActivityPeriods, groupMembers, entityMemberships,
@@ -37,20 +37,20 @@ type Line = {
   context: 'credit' | 'entity';
   creditedNameId?: number | null;
   atDate?: string | null;
-  year?: number | null;
+  year?: string | null;
 };
 type Section = { title: string; titleLang?: string; level?: 2 | 3; lines: Line[] };
 const sections: Section[] = [];
 const facts: { label: string; value: string }[] = [];
 // person/group の「楽曲（Songs）」節：楽曲ごとに main アーティスト＋作家クレジットを集約
-const songRoleGroups: { songId: number; year: number | null; roles: { roleKey: string; sources: SourceEntry[] }[] }[] = [];
+const songRoleGroups: { songId: number; year: string | null; roles: { roleKey: string; sources: SourceEntry[] }[] }[] = [];
 
 // 見出し（MV は楽曲タイトルから導出。それ以外は人物文脈）
 const heading = renderDisplayName(id, entity.entity_type, lang);
 
 if (entity.entity_type === 'song') {
-  const s = getSong(id);
-  if (s?.release_year != null) facts.push({ label: L.releaseYear, value: String(s.release_year) });
+  const sy = songYear(id);
+  if (sy != null) facts.push({ label: L.releaseYear, value: sy });
   sections.push({
     title: L.artists,
     lines: songArtists(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('song_artists_sources', r.id), context: 'credit', creditedNameId: r.credited_name_id, atDate: null })),
@@ -65,8 +65,8 @@ if (entity.entity_type === 'song') {
   });
 } else if (entity.entity_type === 'video') {
   const m = getVideo(id);
-  const at = m ? videoDate(m) : null;
-  if (m?.production_year != null) facts.push({ label: L.productionYear, value: String(m.production_year) });
+  const at = videoYear(id);
+  if (at != null) facts.push({ label: L.productionYear, value: at });
   if (m?.video_type) facts.push({ label: L.videoType, value: videoTypeLabel[lang][m.video_type] ?? m.video_type });
   // アーティスト（見出し直下・クレジット欄より上）：収録楽曲の main を video_songs 経由で導出。
   // 表示名はクレジット文脈（renderCredit・atDate=MVの日付）でページ言語のカスケード解決。
@@ -100,18 +100,18 @@ if (entity.entity_type === 'song') {
 } else {
   // person / group：2節構成（リンク先は作品＝人物文脈で解決）。
   // 節1 映像での関与（Music video work）：video_credits 由来（出演・監督）に song_artists→video_songs 導出の
-  //   アーティストを統合。各行に videos.production_year を併記（NULLは省略）。
+  //   アーティストを統合。各行に MV の導出年（videoYear）を併記（NULLは省略）。
   sections.push({
     title: L.videoWork,
     lines: [
-      ...videoCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.video_id, sources: sourcesFor('video_credits_sources', r.id), context: 'entity' as const, year: getVideo(r.video_id)?.production_year ?? null })),
-      ...artistVideosOf(id).map((r) => ({ roleKey: 'main', targetId: r.videoId, sources: r.sources, context: 'entity' as const, year: getVideo(r.videoId)?.production_year ?? null })),
+      ...videoCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.video_id, sources: sourcesFor('video_credits_sources', r.id), context: 'entity' as const, year: videoYear(r.video_id) })),
+      ...artistVideosOf(id).map((r) => ({ roleKey: 'main', targetId: r.videoId, sources: r.sources, context: 'entity' as const, year: videoYear(r.videoId) })),
     ],
   });
   // 節2 楽曲（Songs）：song_artists(main)＋song_credits(全role)を楽曲ごとに集約。
-  //   役割は Artist系→作詞→作曲→編曲→プロデュース順、release_year 併記。
+  //   役割は Artist系→作詞→作曲→編曲→プロデュース順、楽曲の導出年（songYear）併記。
   for (const g of entitySongRoles(id)) {
-    songRoleGroups.push({ songId: g.songId, year: getSong(g.songId)?.release_year ?? null, roles: g.roles });
+    songRoleGroups.push({ songId: g.songId, year: songYear(g.songId), roles: g.roles });
   }
 }
 const shown = sections.filter((s) => s.lines.length > 0);

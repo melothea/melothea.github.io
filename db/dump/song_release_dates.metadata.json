@@ -1,0 +1,10 @@
+{
+    "name": "song_release_dates",
+    "columns": [
+        "id",
+        "song_id",
+        "date",
+        "release_type"
+    ],
+    "schema": "CREATE TABLE song_release_dates (\n  id           INTEGER PRIMARY KEY,\n  song_id      INTEGER NOT NULL REFERENCES songs(id),\n  date         TEXT NOT NULL,                    -- ISO 8601\u90e8\u5206\u65e5\u4ed8\uff08YYYY\uff0fYYYY-MM\uff0fYYYY-MM-DD\uff09\n  release_type TEXT                              -- NULL\u53ef\u3002CI\u8a9e\u5f59\u30ea\u30b9\u30c8\u3067\u7167\u5408\uff08CHECK\u306a\u3057\uff09\n)"
+}

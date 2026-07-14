@@ -98,9 +98,28 @@ export function neutralName(entityId: number, entityType: EntityType): { text: s
   return p ? { text: p.name_text, lang: p.lang } : { text: `melothea${entityId}`, lang: 'mul' };
 }
 
-/** MV の日付（当時名義導出の atDate）。production_year を ISO 部分日付として使う。 */
-export function videoDate(video: VideoRow): string | null {
-  return video.production_year != null ? String(video.production_year) : null;
+/** 楽曲の年：song_release_dates の当該 song_id の行集合から最古 date を選び、年（先頭4桁）を返す。
+ *  行ゼロなら年なし（null）。 */
+export function songYear(songId: number): string | null {
+  const row = queryOne<{ date: string }>(
+    'SELECT date FROM song_release_dates WHERE song_id = ? ORDER BY date, id LIMIT 1',
+    songId,
+  );
+  return row ? row.date.slice(0, 4) : null;
+}
+
+/** MV の年：video_release_dates の当該 video_id に行があれば最古行の年。無ければ video_songs が
+ *  単曲（1行）のときのみ紐づく楽曲の年（songYear）へフォールバック。複数楽曲（メドレー）は
+ *  フォールバックせず年なし。いずれも得られなければ null。
+ *  当時名義導出の atDate（ISO 部分日付＝年文字列）としても用いる。 */
+export function videoYear(videoId: number): string | null {
+  const row = queryOne<{ date: string }>(
+    'SELECT date FROM video_release_dates WHERE video_id = ? ORDER BY date, id LIMIT 1',
+    videoId,
+  );
+  if (row) return row.date.slice(0, 4);
+  const songs = videoSongs(videoId);
+  return songs.length === 1 ? songYear(songs[0]!.song_id) : null;
 }
 
 // ---- 関係の取得 ----

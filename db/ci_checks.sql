@@ -10,9 +10,10 @@
 --   0 サブタイプ×entity_type / 1 name_type × entity_type（title は楽曲＋被参照MVのみ）/
 --   2 memberships.member型 / 3 credits二表の参加者型 / 4 出演個人原則 /
 --   5 derives_from 非循環・同一entity内 / 6 期間の正気度 /
---   7 video_credits.role・video_type の語彙リスト照合 / 8 完全重複行 /
+--   7 video_credits.role・video_type・release_type の語彙リスト照合／release_dates.date のISO形式 /
+--   8 完全重複行 /
 --   9 出典層の整合：
---     (a) 子テーブル対象10表の各行に対応する出典子テーブル行が1件以上（video_songs は対象外）
+--     (a) 子テーブル対象12表の各行に対応する出典子テーブル行が1件以上（video_songs は対象外）
 --     (b) source_labels の volatile=0 のラベル集合が {'disc','video_disc'} と一致
 --     (d) videos.title_name_id の参照先 names が当該MV自身の title 行であること
 
@@ -133,11 +134,6 @@ SELECT 'membership_period_order' AS check_name, id AS id,
 FROM memberships
 WHERE membership_from IS NOT NULL AND membership_to IS NOT NULL AND membership_from > membership_to;
 
-SELECT 'group_period_order' AS check_name, id AS id,
-       'begin_date='||begin_date||' > end_date='||end_date AS detail
-FROM groups
-WHERE begin_date IS NOT NULL AND end_date IS NOT NULL AND begin_date > end_date;
-
 SELECT 'group_activity_period_order' AS check_name, id AS id,
        'active_from='||active_from||' > active_to='||active_to AS detail
 FROM group_activity_periods
@@ -156,11 +152,6 @@ SELECT 'membership_ended_flag' AS check_name, id AS id,
 FROM memberships
 WHERE membership_to IS NOT NULL AND ended = 0;
 
-SELECT 'group_ended_flag' AS check_name, id AS id,
-       'end_date='||end_date||' but ended=0' AS detail
-FROM groups
-WHERE end_date IS NOT NULL AND ended = 0;
-
 SELECT 'group_activity_ended_flag' AS check_name, id AS id,
        'active_to='||active_to||' but ended=0' AS detail
 FROM group_activity_periods
@@ -178,6 +169,29 @@ WHERE role NOT IN ('director','appearance','choreographer','cinematographer');
 SELECT 'video_type_vocab' AS check_name, id AS id, 'video_type='||video_type AS detail
 FROM videos
 WHERE video_type IS NOT NULL AND video_type NOT IN ('music_video');
+
+-- release_type 語彙リスト照合（許可リストは空。NOT NULL の release_type はすべて違反）。
+-- 語彙の初出時に「AND release_type NOT IN ('新語彙', ...)」を付して許可リストへ加算する。
+SELECT 'song_release_type_vocab' AS check_name, id AS id, 'release_type='||release_type AS detail
+FROM song_release_dates
+WHERE release_type IS NOT NULL;
+
+SELECT 'video_release_type_vocab' AS check_name, id AS id, 'release_type='||release_type AS detail
+FROM video_release_dates
+WHERE release_type IS NOT NULL;
+
+-- date 形式検査：ISO 8601部分日付（YYYY／YYYY-MM／YYYY-MM-DD）のいずれにも適合しない行を返す。
+SELECT 'song_release_date_format' AS check_name, id AS id, 'date='||date AS detail
+FROM song_release_dates
+WHERE NOT (date GLOB '[0-9][0-9][0-9][0-9]'
+        OR date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        OR date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]');
+
+SELECT 'video_release_date_format' AS check_name, id AS id, 'date='||date AS detail
+FROM video_release_dates
+WHERE NOT (date GLOB '[0-9][0-9][0-9][0-9]'
+        OR date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]'
+        OR date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]');
 
 -- ============================================================
 -- 8. 完全重複行の検出（id以外の全列一致＝二重投入ミス）
@@ -263,7 +277,21 @@ FROM (
   WINDOW w AS (PARTITION BY group_id, active_from, active_to, ended)
 ) WHERE c > 1 AND id <> first_id;
 
--- --- 8b. 出典子テーブル10枚の完全重複行（parent_id含む全非id列一致） ---
+SELECT 'dup_row_song_release_dates' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM song_release_dates
+  WINDOW w AS (PARTITION BY song_id, date, release_type)
+) WHERE c > 1 AND id <> first_id;
+
+SELECT 'dup_row_video_release_dates' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM video_release_dates
+  WINDOW w AS (PARTITION BY video_id, date, release_type)
+) WHERE c > 1 AND id <> first_id;
+
+-- --- 8b. 出典子テーブル12枚の完全重複行（parent_id含む全非id列一致） ---
 --    全列一致のみを重複とみなす。
 SELECT 'dup_row_names_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
@@ -335,11 +363,25 @@ FROM (
   WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
 ) WHERE c > 1 AND id <> first_id;
 
+SELECT 'dup_row_song_release_dates_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM song_release_dates_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+) WHERE c > 1 AND id <> first_id;
+
+SELECT 'dup_row_video_release_dates_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
+FROM (
+  SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
+  FROM video_release_dates_sources
+  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+) WHERE c > 1 AND id <> first_id;
+
 -- ============================================================
 -- 9. 出典層の整合
 -- ============================================================
 
--- (a) 子テーブル対象10表の各行に、対応する出典子テーブル行が1件以上存在すること。
+-- (a) 子テーブル対象12表の各行に、対応する出典子テーブル行が1件以上存在すること。
 --     video_songs は出典子テーブルを持たない（対象外）。親行に出典が1件も無ければ違反。
 SELECT 'missing_source_names' AS check_name, n.id AS id, 'no names_sources row' AS detail
 FROM names n WHERE NOT EXISTS (SELECT 1 FROM names_sources s WHERE s.parent_id = n.id);
@@ -370,6 +412,12 @@ FROM song_artist_raw r WHERE NOT EXISTS (SELECT 1 FROM song_artist_raw_sources s
 
 SELECT 'missing_source_mv_artist_raw' AS check_name, r.id AS id, 'no video_artist_raw_sources row' AS detail
 FROM video_artist_raw r WHERE NOT EXISTS (SELECT 1 FROM video_artist_raw_sources s WHERE s.parent_id = r.id);
+
+SELECT 'missing_source_song_release_dates' AS check_name, r.id AS id, 'no song_release_dates_sources row' AS detail
+FROM song_release_dates r WHERE NOT EXISTS (SELECT 1 FROM song_release_dates_sources s WHERE s.parent_id = r.id);
+
+SELECT 'missing_source_video_release_dates' AS check_name, r.id AS id, 'no video_release_dates_sources row' AS detail
+FROM video_release_dates r WHERE NOT EXISTS (SELECT 1 FROM video_release_dates_sources s WHERE s.parent_id = r.id);
 
 -- (b) source_labels の volatile=0（固定資料）のラベル集合が {'disc','video_disc'} と一致すること。
 --     固定資料ラベルを増やした場合は下記の検査集合も同時に更新する。

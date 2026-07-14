@@ -1,4 +1,4 @@
-[8, 2009, "draft", null, null, null, null]
-[9, 2011, "draft", null, null, null, null]
-[10, 2011, "draft", null, null, null, null]
-[16, 2020, "published", null, null, null, null]
+[8, "draft", null, null, null, null]
+[9, "draft", null, null, null, null]
+[10, "draft", null, null, null, null]
+[16, "published", null, null, null, null]

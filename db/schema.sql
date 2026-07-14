@@ -36,9 +36,6 @@ CREATE TABLE people (
 
 CREATE TABLE groups (
   id                 INTEGER PRIMARY KEY REFERENCES entities(id),
-  begin_date         TEXT,                             -- ISO 8601部分日付可。活動開始
-  end_date           TEXT,                             -- 活動終了
-  ended              INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0,1)),
   status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),
   description        TEXT,
   description_source TEXT CHECK (description_source IN ('ai','manual','ai_edited')),
@@ -49,7 +46,6 @@ CREATE TABLE groups (
 
 CREATE TABLE songs (
   id                 INTEGER PRIMARY KEY REFERENCES entities(id),
-  release_year       INTEGER,                          -- リリース年は楽曲側
   status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),
   description        TEXT,
   description_source TEXT CHECK (description_source IN ('ai','manual','ai_edited')),
@@ -61,7 +57,6 @@ CREATE TABLE songs (
 CREATE TABLE videos (
   id                 INTEGER PRIMARY KEY REFERENCES entities(id),
   video_type         TEXT,                             -- 種別。NULL可。CI語彙リストで照合（CHECKなし）
-  production_year    INTEGER,                          -- 制作年はMV側。楽曲との紐付けはvideo_songs経由
   status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),
   description        TEXT,
   description_source TEXT CHECK (description_source IN ('ai','manual','ai_edited')),
@@ -154,6 +149,22 @@ CREATE TABLE group_activity_periods (
   ended       INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0,1))
 );
 
+-- 楽曲のリリース日。1楽曲に複数行可。dateはISO 8601部分日付（年のみ〜日単位）。
+CREATE TABLE song_release_dates (
+  id           INTEGER PRIMARY KEY,
+  song_id      INTEGER NOT NULL REFERENCES songs(id),
+  date         TEXT NOT NULL,                    -- ISO 8601部分日付（YYYY／YYYY-MM／YYYY-MM-DD）
+  release_type TEXT                              -- NULL可。CI語彙リストで照合（CHECKなし）
+);
+
+-- MVのリリース日。1MVに複数行可。列構成はsong_release_datesと同一。
+CREATE TABLE video_release_dates (
+  id           INTEGER PRIMARY KEY,
+  video_id     INTEGER NOT NULL REFERENCES videos(id),
+  date         TEXT NOT NULL,                    -- ISO 8601部分日付（YYYY／YYYY-MM／YYYY-MM-DD）
+  release_type TEXT                              -- NULL可。CI語彙リストで照合（CHECKなし）
+);
+
 -- ============================================================
 -- 生記述層（解決リンクはNULL可・後送り）
 -- ============================================================
@@ -203,7 +214,7 @@ INSERT INTO source_labels(label, volatile) VALUES
   ('web_news',        1),
   ('editor_verified', 1);
 
--- 各親表の出典子テーブル {親表名}_sources。列・CHECKは全10枚に同一に付す。
+-- 各親表の出典子テーブル {親表名}_sources。列・CHECKは全12枚に同一に付す。
 --   日付   ：referenced_at は disc/video_disc 以外で必須
 --   URL    ：disc/video_disc/editor_verified は url NULL、それ以外は url 必須
 --   記述子 ：editor_verified は descriptor NULL、それ以外は descriptor 必須
@@ -296,6 +307,40 @@ CREATE TABLE song_credits_sources (
 CREATE TABLE video_credits_sources (
   id            INTEGER PRIMARY KEY,
   parent_id     INTEGER NOT NULL REFERENCES video_credits(id),
+  label         TEXT NOT NULL REFERENCES source_labels(label),
+  descriptor    TEXT,
+  url           TEXT,
+  referenced_at TEXT,
+  record_ref    TEXT,
+  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
+  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
+      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
+  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
+      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
+  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
+      OR (label <> 'editor_verified' AND record_ref IS NULL))
+);
+
+CREATE TABLE song_release_dates_sources (
+  id            INTEGER PRIMARY KEY,
+  parent_id     INTEGER NOT NULL REFERENCES song_release_dates(id),
+  label         TEXT NOT NULL REFERENCES source_labels(label),
+  descriptor    TEXT,
+  url           TEXT,
+  referenced_at TEXT,
+  record_ref    TEXT,
+  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
+  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
+      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
+  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
+      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
+  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
+      OR (label <> 'editor_verified' AND record_ref IS NULL))
+);
+
+CREATE TABLE video_release_dates_sources (
+  id            INTEGER PRIMARY KEY,
+  parent_id     INTEGER NOT NULL REFERENCES video_release_dates(id),
   label         TEXT NOT NULL REFERENCES source_labels(label),
   descriptor    TEXT,
   url           TEXT,
