@@ -4,5 +4,5 @@
         "id",
         "entity_type"
     ],
-    "schema": "CREATE TABLE entities (\n  id          INTEGER PRIMARY KEY AUTOINCREMENT,\n  entity_type TEXT NOT NULL CHECK (entity_type IN ('person','group','song','mv'))\n)"
+    "schema": "CREATE TABLE \"entities\" (\n  id          INTEGER PRIMARY KEY AUTOINCREMENT,\n  entity_type TEXT NOT NULL CHECK (entity_type IN ('person','group','song','video'))\n)"
 }

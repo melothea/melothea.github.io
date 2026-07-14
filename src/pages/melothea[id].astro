@@ -4,9 +4,9 @@
 // ja/en の各言語ページへ導く。hreflang の x-default 受け皿を兼ねる。
 import Base from '../layouts/Base.astro';
 import SourceList from '../components/SourceList.astro';
-import { allEntities, getSong, getMv, neutralName,
-  songArtists, songCredits, mvsOfSong, mvSongs, mvCredits, mvSongCreditGroups,
-  mvCreditsOfEntity, songCreditsOfEntity, songArtistOf, entityTypeOf,
+import { allEntities, getSong, getVideo, neutralName,
+  songArtists, songCredits, videosOfSong, videoSongs, videoCredits, videoSongCreditGroups,
+  videoCreditsOfEntity, songCreditsOfEntity, songArtistOf, entityTypeOf,
   sourcesFor, type SourceEntry } from '../lib/entities.ts';
 import { bi, neutralPath, langPath, neutralHome, typeLabel, SITE_NAME } from '../lib/i18n.ts';
 import type { EntityRow } from '../lib/db.ts';
@@ -37,30 +37,30 @@ if (entity.entity_type === 'song') {
   });
   sections.push({
     title: bi('収録された映像', 'Featured in'),
-    lines: mvsOfSong(id).map((r) => ({ roleKey: 'mv', targetId: r.mv_id, sources: [] })),
+    lines: videosOfSong(id).map((r) => ({ roleKey: 'video', targetId: r.video_id, sources: [] })),
   });
-} else if (entity.entity_type === 'mv') {
-  const m = getMv(id);
+} else if (entity.entity_type === 'video') {
+  const m = getVideo(id);
   if (m?.production_year != null) facts.push({ label: bi('制作年', 'Production year'), value: String(m.production_year) });
   if (m?.video_type) facts.push({ label: bi('種別', 'Type'), value: m.video_type });
   sections.push({
     title: bi('楽曲', 'Songs'),
-    lines: mvSongs(id).map((r) => ({ roleKey: 'song', targetId: r.song_id, sources: [] })),
+    lines: videoSongs(id).map((r) => ({ roleKey: 'song', targetId: r.song_id, sources: [] })),
   });
-  // クレジット欄：MVクレジット（監督・出演）に mv_songs 経由の楽曲クレジット（作詞・作曲・編曲）を統合。
+  // クレジット欄：MVクレジット（監督・出演）に video_songs 経由の楽曲クレジット（作詞・作曲・編曲）を統合。
   // 単曲MVは1欄に統合、複数楽曲（メドレー）は楽曲ごとに小見出しで分ける。
   // ハブは credited_name_id・atDate を解決せず neutralName（primary逐語）で一律描画する。
-  const songGroups = mvSongCreditGroups(id);
-  const mvCreditLines: Line[] = mvCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('mv_credits_sources', r.id) }));
+  const songGroups = videoSongCreditGroups(id);
+  const videoCreditLines: Line[] = videoCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('video_credits_sources', r.id) }));
   const songCreditLine = (c: { id: number; role: string; entity_id: number }): Line =>
     ({ roleKey: c.role, targetId: c.entity_id, sources: sourcesFor('song_credits_sources', c.id) });
   if (songGroups.length <= 1) {
     sections.push({
       title: bi('クレジット', 'Credits'),
-      lines: [...mvCreditLines, ...(songGroups[0]?.credits ?? []).map(songCreditLine)],
+      lines: [...videoCreditLines, ...(songGroups[0]?.credits ?? []).map(songCreditLine)],
     });
   } else {
-    sections.push({ title: bi('クレジット', 'Credits'), lines: mvCreditLines });
+    sections.push({ title: bi('クレジット', 'Credits'), lines: videoCreditLines });
     for (const g of songGroups) {
       const st = neutralName(g.songId, 'song');
       sections.push({ title: st.text, titleLang: st.lang, level: 3, lines: g.credits.map(songCreditLine) });
@@ -70,7 +70,7 @@ if (entity.entity_type === 'song') {
   // person / group：関与の逆引き
   sections.push({
     title: bi('映像での関与', 'Music video work'),
-    lines: mvCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.mv_id, sources: sourcesFor('mv_credits_sources', r.id) })),
+    lines: videoCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.video_id, sources: sourcesFor('video_credits_sources', r.id) })),
   });
   sections.push({
     title: bi('楽曲クレジット', 'Song credits'),

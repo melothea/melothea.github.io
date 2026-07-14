@@ -1,0 +1,10 @@
+{
+    "name": "video_songs",
+    "columns": [
+        "id",
+        "video_id",
+        "song_id",
+        "position"
+    ],
+    "schema": "CREATE TABLE \"video_songs\" (\n  id       INTEGER PRIMARY KEY,\n  video_id    INTEGER NOT NULL REFERENCES \"videos\"(id),\n  song_id  INTEGER NOT NULL REFERENCES songs(id),\n  position INTEGER NOT NULL)"
+}

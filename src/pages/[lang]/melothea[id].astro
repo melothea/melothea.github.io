@@ -2,16 +2,16 @@
 // 言語ページ（/{lang}/melothea{n}/）。名義は4段カスケード（names.ts）でビルド時導出：
 //   ・作品ページで人物/グループを指すクレジット行＝クレジット文脈（renderCredit）。逐語を保持しつつ
 //     ページ言語の確立形（同一系列）／導出があれば主表示に据える。
-//   ・作品（楽曲・映像）の見出し・リンク＝人物文脈。MV は names 行を持たないため mv_songs 経由で
+//   ・作品（楽曲・映像）の見出し・リンク＝人物文脈。MV は names 行を持たないため video_songs 経由で
 //     楽曲タイトルから導出する（renderDisplayName で見出しと共用）。
 import Base from '../../layouts/Base.astro';
 import SourceList from '../../components/SourceList.astro';
 import {
-  allEntities, getSong, getMv, mvDate, renderDisplayName,
-  songArtists, songCredits, mvsOfSong, mvSongs, mvCredits, mvSongCreditGroups,
-  mvMainArtists, artistMvsOf, entitySongRoles,
+  allEntities, getSong, getVideo, videoDate, renderDisplayName,
+  songArtists, songCredits, videosOfSong, videoSongs, videoCredits, videoSongCreditGroups,
+  videoMainArtists, artistVideosOf, entitySongRoles,
   groupActivityPeriods, groupMembers, entityMemberships,
-  mvCreditsOfEntity, entityTypeOf, sourcesFor, type SourceEntry,
+  videoCreditsOfEntity, entityTypeOf, sourcesFor, type SourceEntry,
 } from '../../lib/entities.ts';
 import { renderCredit, type Rendered } from '../../lib/names.ts';
 import {
@@ -61,37 +61,37 @@ if (entity.entity_type === 'song') {
   });
   sections.push({
     title: L.appearsIn,
-    lines: mvsOfSong(id).map((r) => ({ roleKey: 'mv', targetId: r.mv_id, sources: [], context: 'entity' })),
+    lines: videosOfSong(id).map((r) => ({ roleKey: 'video', targetId: r.video_id, sources: [], context: 'entity' })),
   });
-} else if (entity.entity_type === 'mv') {
-  const m = getMv(id);
-  const at = m ? mvDate(m) : null;
+} else if (entity.entity_type === 'video') {
+  const m = getVideo(id);
+  const at = m ? videoDate(m) : null;
   if (m?.production_year != null) facts.push({ label: L.productionYear, value: String(m.production_year) });
   if (m?.video_type) facts.push({ label: L.videoType, value: videoTypeLabel[lang][m.video_type] ?? m.video_type });
-  // アーティスト（見出し直下・クレジット欄より上）：収録楽曲の main を mv_songs 経由で導出。
+  // アーティスト（見出し直下・クレジット欄より上）：収録楽曲の main を video_songs 経由で導出。
   // 表示名はクレジット文脈（renderCredit・atDate=MVの日付）でページ言語のカスケード解決。
   sections.push({
     title: L.artists,
-    lines: mvMainArtists(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('song_artists_sources', r.id), context: 'credit', creditedNameId: r.credited_name_id, atDate: at })),
+    lines: videoMainArtists(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('song_artists_sources', r.id), context: 'credit', creditedNameId: r.credited_name_id, atDate: at })),
   });
   sections.push({
     title: L.songs,
-    lines: mvSongs(id).map((r) => ({ roleKey: 'song', targetId: r.song_id, sources: [], context: 'entity' })),
+    lines: videoSongs(id).map((r) => ({ roleKey: 'song', targetId: r.song_id, sources: [], context: 'entity' })),
   });
-  // クレジット欄：MVクレジット（監督・出演）に、mv_songs 経由の楽曲クレジット（作詞・作曲・編曲）を
+  // クレジット欄：MVクレジット（監督・出演）に、video_songs 経由の楽曲クレジット（作詞・作曲・編曲）を
   // クレジット文脈（renderCredit・atDate=MVの日付）で統合。単曲MVは1欄に統合、複数楽曲（メドレー）は
   // 楽曲ごとに小見出し（level 3）で分ける。楽曲行そのものへのリンクは上の「楽曲」節で残す。
-  const songGroups = mvSongCreditGroups(id);
-  const mvCreditLines: Line[] = mvCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('mv_credits_sources', r.id), context: 'credit', creditedNameId: r.credited_name_id, atDate: at }));
+  const songGroups = videoSongCreditGroups(id);
+  const videoCreditLines: Line[] = videoCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('video_credits_sources', r.id), context: 'credit', creditedNameId: r.credited_name_id, atDate: at }));
   const songCreditLine = (c: { id: number; role: string; entity_id: number; credited_name_id: number | null }): Line =>
     ({ roleKey: c.role, targetId: c.entity_id, sources: sourcesFor('song_credits_sources', c.id), context: 'credit', creditedNameId: c.credited_name_id, atDate: at });
   if (songGroups.length <= 1) {
     sections.push({
       title: L.credits,
-      lines: [...mvCreditLines, ...(songGroups[0]?.credits ?? []).map(songCreditLine)],
+      lines: [...videoCreditLines, ...(songGroups[0]?.credits ?? []).map(songCreditLine)],
     });
   } else {
-    sections.push({ title: L.credits, lines: mvCreditLines });
+    sections.push({ title: L.credits, lines: videoCreditLines });
     for (const g of songGroups) {
       const st = renderDisplayName(g.songId, 'song', lang);
       sections.push({ title: st.main.text, titleLang: st.main.lang, level: 3, lines: g.credits.map(songCreditLine) });
@@ -99,13 +99,13 @@ if (entity.entity_type === 'song') {
   }
 } else {
   // person / group：2節構成（リンク先は作品＝人物文脈で解決）。
-  // 節1 映像での関与（Music video work）：mv_credits 由来（出演・監督）に song_artists→mv_songs 導出の
-  //   アーティストを統合。各行に mvs.production_year を併記（NULLは省略）。
+  // 節1 映像での関与（Music video work）：video_credits 由来（出演・監督）に song_artists→video_songs 導出の
+  //   アーティストを統合。各行に videos.production_year を併記（NULLは省略）。
   sections.push({
-    title: L.mvWork,
+    title: L.videoWork,
     lines: [
-      ...mvCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.mv_id, sources: sourcesFor('mv_credits_sources', r.id), context: 'entity' as const, year: getMv(r.mv_id)?.production_year ?? null })),
-      ...artistMvsOf(id).map((r) => ({ roleKey: 'main', targetId: r.mvId, sources: r.sources, context: 'entity' as const, year: getMv(r.mvId)?.production_year ?? null })),
+      ...videoCreditsOfEntity(id).map((r) => ({ roleKey: r.role, targetId: r.video_id, sources: sourcesFor('video_credits_sources', r.id), context: 'entity' as const, year: getVideo(r.video_id)?.production_year ?? null })),
+      ...artistVideosOf(id).map((r) => ({ roleKey: 'main', targetId: r.videoId, sources: r.sources, context: 'entity' as const, year: getVideo(r.videoId)?.production_year ?? null })),
     ],
   });
   // 節2 楽曲（Songs）：song_artists(main)＋song_credits(全role)を楽曲ごとに集約。
@@ -166,7 +166,7 @@ const other = otherLang(lang);
         {sec.lines.map((ln) => {
           const r = resolve(ln);
           const t = entityTypeOf(ln.targetId)!;
-          const roleTxt = roleLabel[lang][ln.roleKey] ?? (t === 'mv' ? typeLabel[lang].mv : t === 'song' ? typeLabel[lang].song : ln.roleKey);
+          const roleTxt = roleLabel[lang][ln.roleKey] ?? (t === 'video' ? typeLabel[lang].video : t === 'song' ? typeLabel[lang].song : ln.roleKey);
           return (
             <li>
               <span class="role">{roleTxt}</span>

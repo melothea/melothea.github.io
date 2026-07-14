@@ -49,8 +49,8 @@ export const roleLabel: Record<Lang, Record<string, string>> = {
 };
 
 export const typeLabel: Record<Lang, Record<EntityType, string>> = {
-  ja: { person: '人物', group: 'グループ', song: '楽曲', mv: '映像（MV）' },
-  en: { person: 'Person', group: 'Group', song: 'Song', mv: 'Music video' },
+  ja: { person: '人物', group: 'グループ', song: '楽曲', video: '映像（MV）' },
+  en: { person: 'Person', group: 'Group', song: 'Song', video: 'Music video' },
 };
 
 export const videoTypeLabel: Record<Lang, Record<string, string>> = {
@@ -70,7 +70,7 @@ export const ui: Record<Lang, Record<string, string>> = {
     artists: 'アーティスト',
     appearsIn: '収録された映像',
     songCredits: '楽曲クレジット',
-    mvWork: '映像での関与',
+    videoWork: '映像での関与',
     asArtist: 'アーティストとして',
     activePeriod: '活動期間',
     members: 'メンバー',
@@ -95,7 +95,7 @@ export const ui: Record<Lang, Record<string, string>> = {
     artists: 'Artists',
     appearsIn: 'Featured in',
     songCredits: 'Song credits',
-    mvWork: 'Music video work',
+    videoWork: 'Music video work',
     asArtist: 'As artist',
     activePeriod: 'Active',
     members: 'Members',

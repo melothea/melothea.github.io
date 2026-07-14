@@ -5,7 +5,7 @@
 --
 -- 主キー方針：
 --   entities.id のみ AUTOINCREMENT（公開ID melothea{n} の供給源。削除idの再利用を禁止）
---   people/groups/songs/mvs.id は entities(id) を兼ねる素のPK
+--   people/groups/songs/videos.id は entities(id) を兼ねる素のPK
 --   関係テーブル・生記述層は代理キー id INTEGER PRIMARY KEY。UNIQUE当面なし
 --
 -- 出典：親表ごとの子テーブル（{親表名}_sources）が 1 出典 1 行で保持する（本ファイル末尾）。
@@ -21,7 +21,7 @@ PRAGMA foreign_keys = ON;
 -- 単一ID空間の発番台帳。id が公開ID melothea{n} の n。
 CREATE TABLE entities (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  entity_type TEXT NOT NULL CHECK (entity_type IN ('person','group','song','mv'))
+  entity_type TEXT NOT NULL CHECK (entity_type IN ('person','group','song','video'))
 );
 
 CREATE TABLE people (
@@ -58,10 +58,10 @@ CREATE TABLE songs (
   CHECK (description IS NOT NULL OR description_source IS NULL)
 );
 
-CREATE TABLE mvs (
+CREATE TABLE videos (
   id                 INTEGER PRIMARY KEY REFERENCES entities(id),
   video_type         TEXT,                             -- 種別。NULL可。CI語彙リストで照合（CHECKなし）
-  production_year    INTEGER,                          -- 制作年はMV側。楽曲との紐付けはmv_songs経由
+  production_year    INTEGER,                          -- 制作年はMV側。楽曲との紐付けはvideo_songs経由
   status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),
   description        TEXT,
   description_source TEXT CHECK (description_source IN ('ai','manual','ai_edited')),
@@ -130,18 +130,18 @@ CREATE TABLE song_credits (
 
 -- 映像クレジット。roleは開いた語彙（CHECKなし・CI語彙リストで照合）。
 -- role='appearance' ⇒ entity_type='person' はCI検証で強制。
-CREATE TABLE mv_credits (
+CREATE TABLE video_credits (
   id               INTEGER PRIMARY KEY,
-  mv_id            INTEGER NOT NULL REFERENCES mvs(id),
+  video_id            INTEGER NOT NULL REFERENCES videos(id),
   entity_id        INTEGER NOT NULL REFERENCES entities(id),
   role             TEXT NOT NULL,
   credited_name_id INTEGER REFERENCES names(id)
 );
 
 -- MV×楽曲の中間テーブル。positionはメドレー内順序（通常1）。
-CREATE TABLE mv_songs (
+CREATE TABLE video_songs (
   id       INTEGER PRIMARY KEY,
-  mv_id    INTEGER NOT NULL REFERENCES mvs(id),
+  video_id    INTEGER NOT NULL REFERENCES videos(id),
   song_id  INTEGER NOT NULL REFERENCES songs(id),
   position INTEGER NOT NULL
 );
@@ -160,14 +160,14 @@ CREATE TABLE group_activity_periods (
 
 CREATE TABLE crew_raw (
   id        INTEGER PRIMARY KEY,
-  mv_id     INTEGER NOT NULL REFERENCES mvs(id),
+  video_id     INTEGER NOT NULL REFERENCES videos(id),
   raw_text  TEXT NOT NULL,
   person_id INTEGER REFERENCES people(id)               -- サブタイプ直参照。NULL可（後送り）
 );
 
 CREATE TABLE location_raw (
   id          INTEGER PRIMARY KEY,
-  mv_id       INTEGER NOT NULL REFERENCES mvs(id),
+  video_id       INTEGER NOT NULL REFERENCES videos(id),
   raw_text    TEXT NOT NULL,
   external_id TEXT                                       -- Wikidata/OSM等の外部ID。NULL可
 );
@@ -178,9 +178,9 @@ CREATE TABLE song_artist_raw (
   raw_text TEXT NOT NULL
 );
 
-CREATE TABLE mv_artist_raw (
+CREATE TABLE video_artist_raw (
   id       INTEGER PRIMARY KEY,
-  mv_id    INTEGER NOT NULL REFERENCES mvs(id),
+  video_id    INTEGER NOT NULL REFERENCES videos(id),
   raw_text TEXT NOT NULL
 );
 
@@ -293,9 +293,9 @@ CREATE TABLE song_credits_sources (
       OR (label <> 'editor_verified' AND record_ref IS NULL))
 );
 
-CREATE TABLE mv_credits_sources (
+CREATE TABLE video_credits_sources (
   id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES mv_credits(id),
+  parent_id     INTEGER NOT NULL REFERENCES video_credits(id),
   label         TEXT NOT NULL REFERENCES source_labels(label),
   descriptor    TEXT,
   url           TEXT,
@@ -361,9 +361,9 @@ CREATE TABLE song_artist_raw_sources (
       OR (label <> 'editor_verified' AND record_ref IS NULL))
 );
 
-CREATE TABLE mv_artist_raw_sources (
+CREATE TABLE video_artist_raw_sources (
   id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES mv_artist_raw(id),
+  parent_id     INTEGER NOT NULL REFERENCES video_artist_raw(id),
   label         TEXT NOT NULL REFERENCES source_labels(label),
   descriptor    TEXT,
   url           TEXT,

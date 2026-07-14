@@ -6,9 +6,9 @@ import {
   queryOne,
   type EntityRow,
   type EntityType,
-  type MvCreditRow,
-  type MvRow,
-  type MvSongRow,
+  type VideoCreditRow,
+  type VideoRow,
+  type VideoSongRow,
   type NameRow,
   type SongArtistRow,
   type SongCreditRow,
@@ -33,7 +33,7 @@ type SourceChildTable =
   | 'group_activity_periods_sources'
   | 'song_artists_sources'
   | 'song_credits_sources'
-  | 'mv_credits_sources';
+  | 'video_credits_sources';
 
 export function sourcesFor(childTable: SourceChildTable, parentId: number): SourceEntry[] {
   const rows = query<{
@@ -64,7 +64,7 @@ export function getEntity(id: number): EntityRow | undefined {
 }
 
 export const getSong = (id: number) => queryOne<SongRow>('SELECT * FROM songs WHERE id = ?', id);
-export const getMv = (id: number) => queryOne<MvRow>('SELECT * FROM mvs WHERE id = ?', id);
+export const getVideo = (id: number) => queryOne<VideoRow>('SELECT * FROM videos WHERE id = ?', id);
 
 /** 逐語の primary 名義行（person/group/song）。MV は持たない（導出）。 */
 export function primaryNameRow(entityId: number): NameRow | undefined {
@@ -75,22 +75,22 @@ export function primaryNameRow(entityId: number): NameRow | undefined {
   ) ?? queryOne<NameRow>('SELECT * FROM names WHERE entity_id = ? AND is_primary = 1 LIMIT 1', entityId);
 }
 
-/** MV の表示名は mv_songs 経由で楽曲名から導出。
+/** MV の表示名は video_songs 経由で楽曲名から導出。
  *  複数楽曲（メドレー）なら position 順の逐語 title 行を返す。 */
-export function mvTitleRows(mvId: number): NameRow[] {
+export function videoTitleRows(videoId: number): NameRow[] {
   return query<NameRow>(
     `SELECT n.* FROM names n
-       JOIN mv_songs ms ON ms.song_id = n.entity_id
-      WHERE ms.mv_id = ? AND n.is_primary = 1 AND n.name_type = 'title'
+       JOIN video_songs ms ON ms.song_id = n.entity_id
+      WHERE ms.video_id = ? AND n.is_primary = 1 AND n.name_type = 'title'
       ORDER BY ms.position, ms.id`,
-    mvId,
+    videoId,
   );
 }
 
 /** 一覧・リンク用の逐語名（言語中立）。text と lang を返す。 */
 export function neutralName(entityId: number, entityType: EntityType): { text: string; lang: string } {
-  if (entityType === 'mv') {
-    const rows = mvTitleRows(entityId);
+  if (entityType === 'video') {
+    const rows = videoTitleRows(entityId);
     if (rows.length) return { text: rows.map((r) => r.name_text).join(' / '), lang: rows[0]!.lang };
     return { text: `melothea${entityId}`, lang: 'mul' };
   }
@@ -99,29 +99,29 @@ export function neutralName(entityId: number, entityType: EntityType): { text: s
 }
 
 /** MV の日付（当時名義導出の atDate）。production_year を ISO 部分日付として使う。 */
-export function mvDate(mv: MvRow): string | null {
-  return mv.production_year != null ? String(mv.production_year) : null;
+export function videoDate(video: VideoRow): string | null {
+  return video.production_year != null ? String(video.production_year) : null;
 }
 
 // ---- 関係の取得 ----
 
 // MV ページ：収録楽曲・クレジット
-export const mvSongs = (mvId: number) =>
-  query<MvSongRow>('SELECT * FROM mv_songs WHERE mv_id = ? ORDER BY position, id', mvId);
-export const mvCredits = (mvId: number) =>
-  query<MvCreditRow>('SELECT * FROM mv_credits WHERE mv_id = ? ORDER BY id', mvId);
+export const videoSongs = (videoId: number) =>
+  query<VideoSongRow>('SELECT * FROM video_songs WHERE video_id = ? ORDER BY position, id', videoId);
+export const videoCredits = (videoId: number) =>
+  query<VideoCreditRow>('SELECT * FROM video_credits WHERE video_id = ? ORDER BY id', videoId);
 
 // 楽曲ページ：アーティスト・作家クレジット・収録映像
 export const songArtists = (songId: number) =>
   query<SongArtistRow>('SELECT * FROM song_artists WHERE song_id = ? ORDER BY id', songId);
 export const songCredits = (songId: number) =>
   query<SongCreditRow>('SELECT * FROM song_credits WHERE song_id = ? ORDER BY id', songId);
-export const mvsOfSong = (songId: number) =>
-  query<MvSongRow>('SELECT * FROM mv_songs WHERE song_id = ? ORDER BY id', songId);
+export const videosOfSong = (songId: number) =>
+  query<VideoSongRow>('SELECT * FROM video_songs WHERE song_id = ? ORDER BY id', songId);
 
 // 人物・グループページ：関与の逆引き
-export const mvCreditsOfEntity = (entityId: number) =>
-  query<MvCreditRow>('SELECT * FROM mv_credits WHERE entity_id = ? ORDER BY mv_id, id', entityId);
+export const videoCreditsOfEntity = (entityId: number) =>
+  query<VideoCreditRow>('SELECT * FROM video_credits WHERE entity_id = ? ORDER BY video_id, id', entityId);
 export const songCreditsOfEntity = (entityId: number) =>
   query<SongCreditRow>('SELECT * FROM song_credits WHERE entity_id = ? ORDER BY song_id, id', entityId);
 export const songArtistOf = (entityId: number) =>
@@ -132,21 +132,21 @@ export function entityTypeOf(id: number): EntityType | undefined {
   return getEntity(id)?.entity_type;
 }
 
-/** MV に統合表示する楽曲クレジット（作詞・作曲・編曲）を mv_songs 経由で収録楽曲ごとに束ねる。
+/** MV に統合表示する楽曲クレジット（作詞・作曲・編曲）を video_songs 経由で収録楽曲ごとに束ねる。
  *  単曲MVは1グループ（クレジット欄に統合）、複数楽曲（メドレー）は楽曲ごとに小見出しで分ける。 */
-export function mvSongCreditGroups(mvId: number): { songId: number; credits: SongCreditRow[] }[] {
-  return mvSongs(mvId).map((ms) => ({ songId: ms.song_id, credits: songCredits(ms.song_id) }));
+export function videoSongCreditGroups(videoId: number): { songId: number; credits: SongCreditRow[] }[] {
+  return videoSongs(videoId).map((ms) => ({ songId: ms.song_id, credits: songCredits(ms.song_id) }));
 }
 
-/** MV のアーティスト：mv_songs 経由の収録楽曲の song_artists role='main' を重複なし導出。
+/** MV のアーティスト：video_songs 経由の収録楽曲の song_artists role='main' を重複なし導出。
  *  メドレー（複数楽曲）は position 順に走査し entity_id で重複除去。featured は含めない。 */
-export function mvMainArtists(mvId: number): SongArtistRow[] {
+export function videoMainArtists(videoId: number): SongArtistRow[] {
   const rows = query<SongArtistRow>(
     `SELECT sa.* FROM song_artists sa
-       JOIN mv_songs ms ON ms.song_id = sa.song_id
-      WHERE ms.mv_id = ? AND sa.role = 'main'
+       JOIN video_songs ms ON ms.song_id = sa.song_id
+      WHERE ms.video_id = ? AND sa.role = 'main'
       ORDER BY ms.position, ms.id, sa.id`,
-    mvId,
+    videoId,
   );
   const seen = new Set<number>();
   const out: SongArtistRow[] = [];
@@ -159,24 +159,24 @@ export function mvMainArtists(mvId: number): SongArtistRow[] {
   return out;
 }
 
-/** アーティストとして紐づく MV の逆引き：song_artists role='main' → mv_songs を JOIN し、
- *  当該エンティティが main アーティストの MV を mv_id で重複除去。出典は帰属を担う
+/** アーティストとして紐づく MV の逆引き：song_artists role='main' → video_songs を JOIN し、
+ *  当該エンティティが main アーティストの MV を video_id で重複除去。出典は帰属を担う
  *  song_artists 行の子テーブル（song_artists_sources）から採る。featured は含めない。 */
-export function artistMvsOf(entityId: number): { mvId: number; sources: SourceEntry[] }[] {
-  const rows = query<{ mv_id: number; sa_id: number }>(
-    `SELECT ms.mv_id AS mv_id, sa.id AS sa_id
+export function artistVideosOf(entityId: number): { videoId: number; sources: SourceEntry[] }[] {
+  const rows = query<{ video_id: number; sa_id: number }>(
+    `SELECT ms.video_id AS video_id, sa.id AS sa_id
        FROM song_artists sa
-       JOIN mv_songs ms ON ms.song_id = sa.song_id
+       JOIN video_songs ms ON ms.song_id = sa.song_id
       WHERE sa.entity_id = ? AND sa.role = 'main'
-      ORDER BY ms.mv_id, ms.id`,
+      ORDER BY ms.video_id, ms.id`,
     entityId,
   );
   const seen = new Set<number>();
-  const out: { mvId: number; sources: SourceEntry[] }[] = [];
+  const out: { videoId: number; sources: SourceEntry[] }[] = [];
   for (const r of rows) {
-    if (!seen.has(r.mv_id)) {
-      seen.add(r.mv_id);
-      out.push({ mvId: r.mv_id, sources: sourcesFor('song_artists_sources', r.sa_id) });
+    if (!seen.has(r.video_id)) {
+      seen.add(r.video_id);
+      out.push({ videoId: r.video_id, sources: sourcesFor('song_artists_sources', r.sa_id) });
     }
   }
   return out;
@@ -315,22 +315,22 @@ export function groupActivityPeriods(groupId: number): { text: string; sources: 
   }));
 }
 
-/** role='director' の mv_credits を持つエンティティの重複なし導出（属性は保存しない・ビルド時クエリ）。 */
+/** role='director' の video_credits を持つエンティティの重複なし導出（属性は保存しない・ビルド時クエリ）。 */
 export function directorEntities(): EntityRow[] {
   return query<EntityRow>(
     `SELECT DISTINCT e.id, e.entity_type
-       FROM entities e JOIN mv_credits mc ON mc.entity_id = e.id
+       FROM entities e JOIN video_credits mc ON mc.entity_id = e.id
       WHERE mc.role = 'director'
       ORDER BY e.id`,
   );
 }
 
 /** 見出し・リンクの表示名を人物文脈（renderPerson）で解決する。ただし MV は names 行を持たない
- *  ため、mv_songs 経由で収録楽曲の renderPerson からタイトルを導出する（複数楽曲は ' / ' 結合、
+ *  ため、video_songs 経由で収録楽曲の renderPerson からタイトルを導出する（複数楽曲は ' / ' 結合、
  *  導出不能時のみ識別子 melothea{n} に劣化）。見出しと entity 文脈のリンク解決で共用する。 */
 export function renderDisplayName(entityId: number, entityType: EntityType, lang: Lang): Rendered {
-  if (entityType === 'mv') {
-    const parts = mvSongs(entityId).map((r) => renderPerson(r.song_id, lang));
+  if (entityType === 'video') {
+    const parts = videoSongs(entityId).map((r) => renderPerson(r.song_id, lang));
     if (parts.length === 0) {
       return { main: { text: `melothea${entityId}`, lang: 'mul' }, degraded: true, linkId: entityId };
     }

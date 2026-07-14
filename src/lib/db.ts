@@ -24,7 +24,7 @@ export function queryOne<T>(sql: string, ...params: Array<string | number | null
 
 // ---- 行の型（DDL：db/schema.sql）----
 
-export type EntityType = 'person' | 'group' | 'song' | 'mv';
+export type EntityType = 'person' | 'group' | 'song' | 'video';
 
 export interface EntityRow {
   id: number;
@@ -53,7 +53,7 @@ export interface SongRow {
   status: string;
 }
 
-export interface MvRow {
+export interface VideoRow {
   id: number;
   video_type: string | null;
   production_year: number | null;
@@ -76,17 +76,17 @@ export interface SongCreditRow {
   credited_name_id: number | null;
 }
 
-export interface MvCreditRow {
+export interface VideoCreditRow {
   id: number;
-  mv_id: number;
+  video_id: number;
   entity_id: number;
   role: string; // 開いた語彙（CI検証で照合）
   credited_name_id: number | null;
 }
 
-export interface MvSongRow {
+export interface VideoSongRow {
   id: number;
-  mv_id: number;
+  video_id: number;
   song_id: number;
   position: number;
 }

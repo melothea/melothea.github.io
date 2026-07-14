@@ -10,11 +10,11 @@
 --   0 サブタイプ×entity_type / 1 name_type × entity_type（title は楽曲＋被参照MVのみ）/
 --   2 memberships.member型 / 3 credits二表の参加者型 / 4 出演個人原則 /
 --   5 derives_from 非循環・同一entity内 / 6 期間の正気度 /
---   7 mv_credits.role・video_type の語彙リスト照合 / 8 完全重複行 /
+--   7 video_credits.role・video_type の語彙リスト照合 / 8 完全重複行 /
 --   9 出典層の整合：
---     (a) 子テーブル対象10表の各行に対応する出典子テーブル行が1件以上（mv_songs は対象外）
+--     (a) 子テーブル対象10表の各行に対応する出典子テーブル行が1件以上（video_songs は対象外）
 --     (b) source_labels の volatile=0 のラベル集合が {'disc','video_disc'} と一致
---     (d) mvs.title_name_id の参照先 names が当該MV自身の title 行であること
+--     (d) videos.title_name_id の参照先 names が当該MV自身の title 行であること
 
 -- ============================================================
 -- 0. サブタイプ表 × entity_type の照合
@@ -30,14 +30,14 @@ FROM (
   SELECT s.id, 'songs row but entity_type='||e.entity_type
     FROM songs s JOIN entities e ON e.id = s.id WHERE e.entity_type <> 'song'
   UNION ALL
-  SELECT m.id, 'mvs row but entity_type='||e.entity_type
-    FROM mvs m JOIN entities e ON e.id = m.id WHERE e.entity_type <> 'mv'
+  SELECT m.id, 'videos row but entity_type='||e.entity_type
+    FROM videos m JOIN entities e ON e.id = m.id WHERE e.entity_type <> 'video'
 ) x;
 
 -- ============================================================
 -- 1. name_type × entity_type
 --    対応表：act_name＝person/group ／ legal_name＝person ／
---            title＝楽曲、および mvs.title_name_id から参照されるMV
+--            title＝楽曲、および videos.title_name_id から参照されるMV
 --            （MVの title 行で被参照でないものは違反）
 -- ============================================================
 SELECT 'name_type_x_entity_type' AS check_name, n.id AS id,
@@ -48,8 +48,8 @@ WHERE NOT (
       (n.name_type = 'act_name'   AND e.entity_type IN ('person','group'))
    OR (n.name_type = 'legal_name' AND e.entity_type = 'person')
    OR (n.name_type = 'title'      AND e.entity_type = 'song')
-   OR (n.name_type = 'title'      AND e.entity_type = 'mv'
-        AND n.id IN (SELECT title_name_id FROM mvs WHERE title_name_id IS NOT NULL))
+   OR (n.name_type = 'title'      AND e.entity_type = 'video'
+        AND n.id IN (SELECT title_name_id FROM videos WHERE title_name_id IS NOT NULL))
 );
 
 -- ============================================================
@@ -62,7 +62,7 @@ JOIN entities e ON e.id = m.member_id
 WHERE e.entity_type NOT IN ('person','group');
 
 -- ============================================================
--- 3. song_credits / mv_credits の参加者型（person または group のみ）
+-- 3. song_credits / video_credits の参加者型（person または group のみ）
 -- ============================================================
 SELECT 'song_credit_participant_type' AS check_name, sc.id AS id,
        'entity_id='||sc.entity_id||' entity_type='||e.entity_type||' role='||sc.role AS detail
@@ -70,9 +70,9 @@ FROM song_credits sc
 JOIN entities e ON e.id = sc.entity_id
 WHERE e.entity_type NOT IN ('person','group');
 
-SELECT 'mv_credit_participant_type' AS check_name, mc.id AS id,
+SELECT 'video_credit_participant_type' AS check_name, mc.id AS id,
        'entity_id='||mc.entity_id||' entity_type='||e.entity_type||' role='||mc.role AS detail
-FROM mv_credits mc
+FROM video_credits mc
 JOIN entities e ON e.id = mc.entity_id
 WHERE e.entity_type NOT IN ('person','group');
 
@@ -84,11 +84,11 @@ JOIN entities e ON e.id = sa.entity_id
 WHERE e.entity_type NOT IN ('person','group');
 
 -- ============================================================
--- 4. 出演個人原則（mv_credits.role='appearance' ⇒ entity_type='person'）
+-- 4. 出演個人原則（video_credits.role='appearance' ⇒ entity_type='person'）
 -- ============================================================
 SELECT 'appearance_must_be_person' AS check_name, mc.id AS id,
        'entity_id='||mc.entity_id||' entity_type='||e.entity_type AS detail
-FROM mv_credits mc
+FROM video_credits mc
 JOIN entities e ON e.id = mc.entity_id
 WHERE mc.role = 'appearance' AND e.entity_type <> 'person';
 
@@ -168,15 +168,15 @@ WHERE active_to IS NOT NULL AND ended = 0;
 
 -- ============================================================
 -- 7. 語彙リスト照合
---    mv_credits.role ∈ {director,appearance,choreographer,cinematographer}
---    mvs.video_type ∈ {music_video}（NULLは許容）
+--    video_credits.role ∈ {director,appearance,choreographer,cinematographer}
+--    videos.video_type ∈ {music_video}（NULLは許容）
 -- ============================================================
-SELECT 'mv_credit_role_vocab' AS check_name, id AS id, 'role='||role AS detail
-FROM mv_credits
+SELECT 'video_credit_role_vocab' AS check_name, id AS id, 'role='||role AS detail
+FROM video_credits
 WHERE role NOT IN ('director','appearance','choreographer','cinematographer');
 
 SELECT 'video_type_vocab' AS check_name, id AS id, 'video_type='||video_type AS detail
-FROM mvs
+FROM videos
 WHERE video_type IS NOT NULL AND video_type NOT IN ('music_video');
 
 -- ============================================================
@@ -217,29 +217,29 @@ FROM (
 SELECT 'dup_row_mv_credits' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
-  FROM mv_credits
-  WINDOW w AS (PARTITION BY mv_id, entity_id, role, credited_name_id)
+  FROM video_credits
+  WINDOW w AS (PARTITION BY video_id, entity_id, role, credited_name_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_mv_songs' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
-  FROM mv_songs
-  WINDOW w AS (PARTITION BY mv_id, song_id, position)
+  FROM video_songs
+  WINDOW w AS (PARTITION BY video_id, song_id, position)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_crew_raw' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM crew_raw
-  WINDOW w AS (PARTITION BY mv_id, raw_text, person_id)
+  WINDOW w AS (PARTITION BY video_id, raw_text, person_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_location_raw' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM location_raw
-  WINDOW w AS (PARTITION BY mv_id, raw_text, external_id)
+  WINDOW w AS (PARTITION BY video_id, raw_text, external_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_song_artist_raw' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
@@ -252,8 +252,8 @@ FROM (
 SELECT 'dup_row_mv_artist_raw' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
-  FROM mv_artist_raw
-  WINDOW w AS (PARTITION BY mv_id, raw_text)
+  FROM video_artist_raw
+  WINDOW w AS (PARTITION BY video_id, raw_text)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_group_activity_periods' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
@@ -303,7 +303,7 @@ FROM (
 SELECT 'dup_row_mv_credits_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
-  FROM mv_credits_sources
+  FROM video_credits_sources
   WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
 ) WHERE c > 1 AND id <> first_id;
 
@@ -331,7 +331,7 @@ FROM (
 SELECT 'dup_row_mv_artist_raw_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
-  FROM mv_artist_raw_sources
+  FROM video_artist_raw_sources
   WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
 ) WHERE c > 1 AND id <> first_id;
 
@@ -340,7 +340,7 @@ FROM (
 -- ============================================================
 
 -- (a) 子テーブル対象10表の各行に、対応する出典子テーブル行が1件以上存在すること。
---     mv_songs は出典子テーブルを持たない（対象外）。親行に出典が1件も無ければ違反。
+--     video_songs は出典子テーブルを持たない（対象外）。親行に出典が1件も無ければ違反。
 SELECT 'missing_source_names' AS check_name, n.id AS id, 'no names_sources row' AS detail
 FROM names n WHERE NOT EXISTS (SELECT 1 FROM names_sources s WHERE s.parent_id = n.id);
 
@@ -356,8 +356,8 @@ FROM song_artists a WHERE NOT EXISTS (SELECT 1 FROM song_artists_sources s WHERE
 SELECT 'missing_source_song_credits' AS check_name, c.id AS id, 'no song_credits_sources row' AS detail
 FROM song_credits c WHERE NOT EXISTS (SELECT 1 FROM song_credits_sources s WHERE s.parent_id = c.id);
 
-SELECT 'missing_source_mv_credits' AS check_name, c.id AS id, 'no mv_credits_sources row' AS detail
-FROM mv_credits c WHERE NOT EXISTS (SELECT 1 FROM mv_credits_sources s WHERE s.parent_id = c.id);
+SELECT 'missing_source_mv_credits' AS check_name, c.id AS id, 'no video_credits_sources row' AS detail
+FROM video_credits c WHERE NOT EXISTS (SELECT 1 FROM video_credits_sources s WHERE s.parent_id = c.id);
 
 SELECT 'missing_source_crew_raw' AS check_name, r.id AS id, 'no crew_raw_sources row' AS detail
 FROM crew_raw r WHERE NOT EXISTS (SELECT 1 FROM crew_raw_sources s WHERE s.parent_id = r.id);
@@ -368,8 +368,8 @@ FROM location_raw r WHERE NOT EXISTS (SELECT 1 FROM location_raw_sources s WHERE
 SELECT 'missing_source_song_artist_raw' AS check_name, r.id AS id, 'no song_artist_raw_sources row' AS detail
 FROM song_artist_raw r WHERE NOT EXISTS (SELECT 1 FROM song_artist_raw_sources s WHERE s.parent_id = r.id);
 
-SELECT 'missing_source_mv_artist_raw' AS check_name, r.id AS id, 'no mv_artist_raw_sources row' AS detail
-FROM mv_artist_raw r WHERE NOT EXISTS (SELECT 1 FROM mv_artist_raw_sources s WHERE s.parent_id = r.id);
+SELECT 'missing_source_mv_artist_raw' AS check_name, r.id AS id, 'no video_artist_raw_sources row' AS detail
+FROM video_artist_raw r WHERE NOT EXISTS (SELECT 1 FROM video_artist_raw_sources s WHERE s.parent_id = r.id);
 
 -- (b) source_labels の volatile=0（固定資料）のラベル集合が {'disc','video_disc'} と一致すること。
 --     固定資料ラベルを増やした場合は下記の検査集合も同時に更新する。
@@ -382,12 +382,12 @@ WHERE EXISTS (SELECT 1 FROM source_labels WHERE volatile = 0 AND label NOT IN ('
    OR EXISTS (SELECT 1 FROM source_labels WHERE label IN ('disc','video_disc') AND (volatile <> 0 OR volatile IS NULL))
    OR (SELECT count(*) FROM source_labels WHERE volatile = 0) <> 2;
 
--- (d) mvs.title_name_id が非NULLなら、参照先 names 行の entity_id が当該MV自身であり
+-- (d) videos.title_name_id が非NULLなら、参照先 names 行の entity_id が当該MV自身であり
 --     name_type='title' であること。
 SELECT 'title_name_id_integrity' AS check_name, m.id AS id,
        'title_name_id='||m.title_name_id||' -> name entity='||n.entity_id
        ||' name_type='||n.name_type AS detail
-FROM mvs m
+FROM videos m
 JOIN names n ON n.id = m.title_name_id
 WHERE m.title_name_id IS NOT NULL
   AND (n.entity_id <> m.id OR n.name_type <> 'title');

@@ -1,0 +1,15 @@
+{
+    "name": "videos",
+    "columns": [
+        "id",
+        "video_type",
+        "production_year",
+        "status",
+        "description",
+        "description_source",
+        "wikidata_qid",
+        "mbid",
+        "title_name_id"
+    ],
+    "schema": "CREATE TABLE \"videos\" (\n  id                 INTEGER PRIMARY KEY REFERENCES entities(id),\n  video_type         TEXT,                             -- \u7a2e\u5225\u3002\u89b3\u6e2c\u3067\u304d\u306a\u3044\u3068\u304d\u63a8\u6e2c\u3067\u57cb\u3081\u306a\u3044\u305f\u3081NULL\u53ef\u3002CI\u8a9e\u5f59\u30ea\u30b9\u30c8\u3067\u7167\u5408\uff08CHECK\u306a\u3057\uff09\n  production_year    INTEGER,                          -- \u5236\u4f5c\u5e74\u306fMV\u5074\u3002\u697d\u66f2\u3068\u306e\u7d10\u4ed8\u3051\u306fvideo_songs\u7d4c\u7531\n  status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),\n  description        TEXT,\n  description_source TEXT CHECK (description_source IN ('ai','manual','ai_edited')),\n  wikidata_qid       TEXT,\n  mbid               TEXT,\n  title_name_id      INTEGER REFERENCES names(id),\n  CHECK (description IS NOT NULL OR description_source IS NULL)\n)"
+}

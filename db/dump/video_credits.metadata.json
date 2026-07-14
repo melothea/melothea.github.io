@@ -1,0 +1,11 @@
+{
+    "name": "video_credits",
+    "columns": [
+        "id",
+        "video_id",
+        "entity_id",
+        "role",
+        "credited_name_id"
+    ],
+    "schema": "CREATE TABLE \"video_credits\" (\n  id               INTEGER PRIMARY KEY,\n  video_id            INTEGER NOT NULL REFERENCES \"videos\"(id),\n  entity_id        INTEGER NOT NULL REFERENCES entities(id),\n  role             TEXT NOT NULL,\n  credited_name_id INTEGER REFERENCES names(id))"
+}

@@ -17,11 +17,11 @@ const L = ui[lang];
 
 const entities = allEntities();
 // 楽曲は一覧から外す（楽曲ページの生成・公開は維持。導線はMVページの楽曲リンク経由）。
-const order: EntityType[] = ['mv', 'person', 'group'];
+const order: EntityType[] = ['video', 'person', 'group'];
 const groups = order
   .map((t) => ({ type: t, items: entities.filter((e) => e.entity_type === t) }))
   .filter((g) => g.items.length > 0);
-// 監督＝mv_credits role='director' の重複なし導出（属性は保存しない・ビルド時）。人物・グループの
+// 監督＝video_credits role='director' の重複なし導出（属性は保存しない・ビルド時）。人物・グループの
 // 全量一覧の上位に置く（全量一覧は残す）。
 const directors = directorEntities();
 
@@ -40,7 +40,7 @@ const other = otherLang(lang);
     <a href={neutralHome()} hreflang="x-default">{L.neutralPage}</a>
   </nav>
 
-  {groups.filter((g) => g.type === 'mv').map((g) => (
+  {groups.filter((g) => g.type === 'video').map((g) => (
     <section>
       <h2>{typeLabel[lang][g.type]}</h2>
       <ul class="rel">
@@ -74,7 +74,7 @@ const other = otherLang(lang);
     </section>
   )}
 
-  {groups.filter((g) => g.type !== 'mv').map((g) => (
+  {groups.filter((g) => g.type !== 'video').map((g) => (
     <section>
       <h2>{typeLabel[lang][g.type]}</h2>
       <ul class="rel">

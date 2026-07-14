@@ -1,0 +1,9 @@
+{
+    "name": "video_artist_raw",
+    "columns": [
+        "id",
+        "video_id",
+        "raw_text"
+    ],
+    "schema": "CREATE TABLE \"video_artist_raw\" (\n  id       INTEGER PRIMARY KEY,\n  video_id    INTEGER NOT NULL REFERENCES \"videos\"(id),\n  raw_text TEXT NOT NULL)"
+}
