@@ -1,6 +1,6 @@
 # db — Melothea データ層（フェーズ2a）
 
-正本仕様は `~/ai-context/mv/MV_DATABASE.md`（本リポジトリにコミットしない。CLAUDE.md参照）。
+正本仕様は ai-context リポジトリ（編纂者の私有・非公開、`~/ai-context/mv-ai/`）。本リポジトリにコミットしない。所在と読み順は CLAUDE.md に従う。
 
 ## ファイル
 
