@@ -224,8 +224,8 @@ type MembershipRow = {
   id: number;
   group_id: number;
   member_id: number;
-  joined: string | null;
-  left: string | null;
+  membership_from: string | null;
+  membership_to: string | null;
   ended: number;
 };
 
@@ -256,11 +256,11 @@ const cmpStr = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 
 export interface PeriodGroup {
   entityId: number; // 相手（member_id または group_id）
-  periods: { text: string; sources: SourceEntry[] }[]; // joined 昇順
+  periods: { text: string; sources: SourceEntry[] }[]; // membership_from 昇順
 }
 
-/** memberships 行を「相手」で集約。並び：集約後の最古 joined 昇順、タイは entitySortKey の
- *  コードポイント。各グループ内の期間は joined 昇順。 */
+/** memberships 行を「相手」で集約。並び：集約後の最古 membership_from 昇順、タイは entitySortKey の
+ *  コードポイント。各グループ内の期間は membership_from 昇順。 */
 function aggregateMemberships(rows: MembershipRow[], otherOf: (r: MembershipRow) => number): PeriodGroup[] {
   const byOther = new Map<number, MembershipRow[]>();
   for (const r of rows) {
@@ -270,13 +270,13 @@ function aggregateMemberships(rows: MembershipRow[], otherOf: (r: MembershipRow)
     else byOther.set(k, [r]);
   }
   const groups = [...byOther.entries()].map(([entityId, rs]) => {
-    const sorted = rs.slice().sort((a, b) => cmpStr(a.joined ?? '', b.joined ?? ''));
+    const sorted = rs.slice().sort((a, b) => cmpStr(a.membership_from ?? '', b.membership_from ?? ''));
     return {
       entityId,
-      earliest: sorted[0]?.joined ?? '',
+      earliest: sorted[0]?.membership_from ?? '',
       sortKey: entitySortKey(entityId),
       periods: sorted.map((r) => ({
-        text: periodText(r.joined, r.left, r.ended),
+        text: periodText(r.membership_from, r.membership_to, r.ended),
         sources: sourcesFor('memberships_sources', r.id),
       })),
     };
@@ -288,7 +288,7 @@ function aggregateMemberships(rows: MembershipRow[], otherOf: (r: MembershipRow)
 /** グループのメンバー（memberships を member_id で集約）。 */
 export function groupMembers(groupId: number): PeriodGroup[] {
   const rows = query<MembershipRow>(
-    'SELECT id, group_id, member_id, joined, "left", ended FROM memberships WHERE group_id = ? ORDER BY member_id, joined, id',
+    'SELECT id, group_id, member_id, membership_from, membership_to, ended FROM memberships WHERE group_id = ? ORDER BY member_id, membership_from, id',
     groupId,
   );
   return aggregateMemberships(rows, (r) => r.member_id);
@@ -297,7 +297,7 @@ export function groupMembers(groupId: number): PeriodGroup[] {
 /** エンティティの所属（memberships を member_id=当該で逆引き、group_id で集約）。 */
 export function entityMemberships(entityId: number): PeriodGroup[] {
   const rows = query<MembershipRow>(
-    'SELECT id, group_id, member_id, joined, "left", ended FROM memberships WHERE member_id = ? ORDER BY group_id, joined, id',
+    'SELECT id, group_id, member_id, membership_from, membership_to, ended FROM memberships WHERE member_id = ? ORDER BY group_id, membership_from, id',
     entityId,
   );
   return aggregateMemberships(rows, (r) => r.group_id);

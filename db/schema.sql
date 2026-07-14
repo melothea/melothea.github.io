@@ -102,12 +102,12 @@ CREATE UNIQUE INDEX idx_names_primary
 -- 在籍関係。group_idはgroups直参照、member_idはentities参照（＋CI検証）。
 -- UNIQUE(member_id, group_id)は張らない。
 CREATE TABLE memberships (
-  id        INTEGER PRIMARY KEY,
-  group_id  INTEGER NOT NULL REFERENCES groups(id),
-  member_id INTEGER NOT NULL REFERENCES entities(id),  -- 人物またはグループ（内包型）
-  joined    TEXT,
-  "left"    TEXT,                                       -- LEFTは予約語のため引用
-  ended     INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0,1))
+  id              INTEGER PRIMARY KEY,
+  group_id        INTEGER NOT NULL REFERENCES groups(id),
+  member_id       INTEGER NOT NULL REFERENCES entities(id),  -- 人物またはグループ（内包型）
+  membership_from TEXT,
+  membership_to   TEXT,
+  ended           INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0,1))
 );
 
 -- アーティスト名義関係。roleは閉じた語彙（CHECK）。

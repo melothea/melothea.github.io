@@ -4,9 +4,9 @@
         "id",
         "group_id",
         "member_id",
-        "joined",
-        "left",
+        "membership_from",
+        "membership_to",
         "ended"
     ],
-    "schema": "CREATE TABLE memberships (\n  id        INTEGER PRIMARY KEY,\n  group_id  INTEGER NOT NULL REFERENCES groups(id),\n  member_id INTEGER NOT NULL REFERENCES entities(id),  -- \u4eba\u7269\u307e\u305f\u306f\u30b0\u30eb\u30fc\u30d7\uff08\u5185\u5305\u578b\uff09\n  joined    TEXT,\n  \"left\"    TEXT,                                       -- LEFT\u306f\u4e88\u7d04\u8a9e\u306e\u305f\u3081\u5f15\u7528\n  ended     INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0,1)))"
+    "schema": "CREATE TABLE \"memberships\" (\n  id              INTEGER PRIMARY KEY,\n  group_id        INTEGER NOT NULL REFERENCES groups(id),\n  member_id       INTEGER NOT NULL REFERENCES entities(id),  -- \u4eba\u7269\u307e\u305f\u306f\u30b0\u30eb\u30fc\u30d7\uff08\u5185\u5305\u578b\uff09\n  membership_from TEXT,\n  membership_to   TEXT,\n  ended           INTEGER NOT NULL DEFAULT 0 CHECK (ended IN (0,1))\n)"
 }

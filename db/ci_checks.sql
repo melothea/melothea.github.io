@@ -129,9 +129,9 @@ FROM names
 WHERE valid_from IS NOT NULL AND valid_to IS NOT NULL AND valid_from > valid_to;
 
 SELECT 'membership_period_order' AS check_name, id AS id,
-       'joined='||joined||' > left='||"left" AS detail
+       'membership_from='||membership_from||' > membership_to='||membership_to AS detail
 FROM memberships
-WHERE joined IS NOT NULL AND "left" IS NOT NULL AND joined > "left";
+WHERE membership_from IS NOT NULL AND membership_to IS NOT NULL AND membership_from > membership_to;
 
 SELECT 'group_period_order' AS check_name, id AS id,
        'begin_date='||begin_date||' > end_date='||end_date AS detail
@@ -152,9 +152,9 @@ FROM names
 WHERE valid_to IS NOT NULL AND ended = 0;
 
 SELECT 'membership_ended_flag' AS check_name, id AS id,
-       'left='||"left"||' but ended=0' AS detail
+       'membership_to='||membership_to||' but ended=0' AS detail
 FROM memberships
-WHERE "left" IS NOT NULL AND ended = 0;
+WHERE membership_to IS NOT NULL AND ended = 0;
 
 SELECT 'group_ended_flag' AS check_name, id AS id,
        'end_date='||end_date||' but ended=0' AS detail
@@ -197,7 +197,7 @@ SELECT 'dup_row_memberships' AS check_name, id AS id, 'duplicate of id '||first_
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM memberships
-  WINDOW w AS (PARTITION BY group_id, member_id, joined, "left", ended)
+  WINDOW w AS (PARTITION BY group_id, member_id, membership_from, membership_to, ended)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_song_artists' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
