@@ -53,6 +53,14 @@ export const typeLabel: Record<Lang, Record<EntityType, string>> = {
   en: { person: 'Person', group: 'Group', song: 'Song', video: 'Music video' },
 };
 
+// 言語中立ハブの言語選択行用：種別短縮ラベル（ja のみ。en は typeLabel.en を用いる）
+export const neutralTypeLabelJa: Record<EntityType, string> = {
+  video: 'MV',
+  song: '曲',
+  person: '人物',
+  group: 'グループ',
+};
+
 export const videoTypeLabel: Record<Lang, Record<string, string>> = {
   ja: { music_video: 'ミュージックビデオ' },
   en: { music_video: 'Music video' },

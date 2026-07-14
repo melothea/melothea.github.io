@@ -75,16 +75,30 @@ export function primaryNameRow(entityId: number): NameRow | undefined {
   ) ?? queryOne<NameRow>('SELECT * FROM names WHERE entity_id = ? AND is_primary = 1 LIMIT 1', entityId);
 }
 
-/** MV の表示名は video_songs 経由で楽曲名から導出。
- *  複数楽曲（メドレー）なら position 順の逐語 title 行を返す。 */
-export function videoTitleRows(videoId: number): NameRow[] {
-  return query<NameRow>(
-    `SELECT n.* FROM names n
-       JOIN video_songs ms ON ms.song_id = n.entity_id
-      WHERE ms.video_id = ? AND n.is_primary = 1 AND n.name_type = 'title'
-      ORDER BY ms.position, ms.id`,
-    videoId,
+/** 楽曲1件の中立表示名行：ja primary title → 任意の primary title → 先頭の title 行（id昇順）。 */
+function songTitleRow(songId: number): NameRow | undefined {
+  return (
+    queryOne<NameRow>(
+      "SELECT * FROM names WHERE entity_id = ? AND is_primary = 1 AND name_type = 'title' AND locale = 'ja' LIMIT 1",
+      songId,
+    ) ??
+    queryOne<NameRow>(
+      "SELECT * FROM names WHERE entity_id = ? AND is_primary = 1 AND name_type = 'title' LIMIT 1",
+      songId,
+    ) ??
+    queryOne<NameRow>(
+      "SELECT * FROM names WHERE entity_id = ? AND name_type = 'title' ORDER BY id LIMIT 1",
+      songId,
+    )
   );
+}
+
+/** MV の表示名は video_songs 経由で楽曲名から導出。
+ *  複数楽曲（メドレー）なら position 順に、楽曲ごとに1行（songTitleRow）を返す。 */
+export function videoTitleRows(videoId: number): NameRow[] {
+  return videoSongs(videoId)
+    .map((ms) => songTitleRow(ms.song_id))
+    .filter((r): r is NameRow => r != null);
 }
 
 /** 一覧・リンク用の逐語名（言語中立）。text と lang を返す。 */
