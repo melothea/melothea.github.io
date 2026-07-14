@@ -20,3 +20,5 @@
 [20, 6, "Toshiki Hata", "ja-Latn", "en", 1, "act_name", "adapted", null, 6, null, null, 0]
 [21, 16, "\u6c38\u9060\u306e\u4e0d\u5728\u8a3c\u660e", "ja", "ja", 1, "title", "original", null, null, null, null, 0]
 [22, 16, "The Scarlet Alibi", "en", "en", 1, "title", "adapted", null, 21, null, null, 0]
+[23, 18, "\u7dd1\u9152", "ja", "ja", 1, "title", "original", null, null, null, null, 0]
+[24, 18, "Awakening", "en", "en", 1, "title", "original", null, null, null, null, 0]
