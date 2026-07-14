@@ -1,30 +1,8 @@
-// 名義表示の4段カスケード（正本：~/ai-context/mv/MV_DATABASE.md「表示の二水準と4段カスケード」）。
-// ビルド時導出。導出値はDBに書き込まない。
-//
-// 二水準：
-//   ・クレジット文脈（作品ページのクレジット欄）＝当該クレジットが指す名義行が錨。逐語を常に保持。
-//   ・人物文脈（見出し・一覧・リンクテキスト）＝人物エンティティが錨。
-//
-// カスケード（主表示の決定）：
+// 名義表示の4段カスケード。ビルド時導出（導出値はDBに書き込まない）。
 //   1. 逐語（クレジット文脈では常に保持・表示）
-//   2. ページ言語localeの確立形。
-//        クレジット文脈：クレジット名義に対応する系列＝derives_from 参照を優先（確定仕様）。
-//          確立形行がクレジット逐語行と derives_from 連結（同一系列。自己参照は自明に連結）である
-//          ことを確認してから採用し、系列不一致なら採用せず次段へ倒す。これは百瀬ひなの型判定
-//          （旧名義のクレジットに現名義系列の確立形を出さない）のフェーズ1確定判定の実装であって、
-//          将来の細則拡張ではない。
-//        人物文脈：人物の locale別 primary を直取り（錨が人物エンティティのため系列条件は付かない）。
-//   3. 言語別フォールバック（細則はフェーズ2残課題。ja/en では該当なし＝未発火）。
-//   4. 導出転写。発火条件：origin='original' かつ、文字体系が自足的（ハングル・キリル等）なら name_text、
-//      ja（漢字かな交じり）なら reading を入力。reading が NULL なら発火せず、逐語＋人物リンクに落ちる
-//      （粗悪な代用を出さず劣化する）。
-//
-// 本スライス（CS Channel期3本）の実データは全名義が lang=ja・locale=ja・is_primary=1・reading=NULL・
-// origin=original で derives_from なし。したがって：
-//   ・ja ページ：2段目の確立形候補（locale=ja primary）が逐語行そのもの＝自己連結で採用される。
-//   ・en ページ：locale=en 行が無く2段目不発火、reading=NULL で4段目も不発火 → 逐語（lang=ja）＋
-//     人物リンクに劣化する。
-// 両分岐とも本実装で実際に通す。
+//   2. ページ言語localeの確立形（クレジット文脈は derives_from 同一系列に限る）
+//   3. 言語別フォールバック（現データでは未発火）
+//   4. 導出転写（origin='original' かつ reading 等の入力があるとき。無ければ逐語へ劣化）
 
 import { query, type NameRow } from './db.ts';
 
@@ -49,7 +27,7 @@ function nameById(id: number): NameRow | undefined {
   return query<NameRow>('SELECT * FROM names WHERE id = ?', id)[0];
 }
 
-/** 人物文脈の2段目：ページ言語localeの primary（系列条件なし。錨が人物エンティティのため）。 */
+/** 人物文脈の2段目：ページ言語localeの primary。 */
 function localePrimary(entityId: number, lang: Lang): NameRow | undefined {
   return query<NameRow>(
     'SELECT * FROM names WHERE entity_id = ? AND locale = ? AND is_primary = 1 ORDER BY id LIMIT 1',
@@ -58,9 +36,7 @@ function localePrimary(entityId: number, lang: Lang): NameRow | undefined {
   )[0];
 }
 
-/** aId と bId が同一 entity 内で derives_from によって連結された同一系列か。
- *  自己参照（aId===bId）は自明に連結。derives_from は無向連結成分として扱う
- *  （CI検証が同一entity内・非循環を保証するため終端する）。 */
+/** aId と bId が同一 entity 内で derives_from により連結された同一系列か（自己参照は連結）。 */
 function sameSeries(entityId: number, aId: number, bId: number): boolean {
   if (aId === bId) return true;
   const adj = new Map<number, number[]>();
@@ -104,13 +80,10 @@ function establishedInSeries(entityId: number, lang: Lang, verbatimId: number): 
 /** 4段目：導出転写。発火条件を満たさなければ undefined（＝逐語へ劣化）。 */
 function derive(base: NameRow, _lang: Lang): { text: string; lang: string } | undefined {
   if (base.origin !== 'original') return undefined; // adapted は二次転写禁止
-  // 自足的文字体系（ハングル・キリル等）は name_text 自体が導出入力。現データに該当言語はない。
+  // 自足的文字体系（ハングル・キリル等）は name_text を導出入力に取る。
   // ja（漢字かな交じり）は reading を入力に取る。reading が NULL なら発火せず劣化。
   if (base.lang === 'ja' || base.lang.startsWith('ja-')) {
-    if (base.reading == null) return undefined; // 発火せず劣化（設計どおり）
-    // reading があるケースの転写細則（修正ヘボン式・語順等）はフェーズ2残課題で未確定のため、
-    // 現時点では導出を発火させず劣化に倒す（粗悪な代用を出さない）。データ投入で reading が
-    // 現れた時点で細則を確定して差し込む。
+    if (base.reading == null) return undefined; // 発火せず劣化
     return undefined;
   }
   return undefined;
@@ -186,6 +159,6 @@ export function renderCredit(
     const sub = derived.text !== verbatim.text ? verbatim : undefined;
     return { main: derived, sub, degraded: false, linkId: entityId };
   }
-  // 劣化：逐語＋人物リンク（en ページで日本語名義が出る経路）
+  // 劣化：逐語＋人物リンク
   return { main: verbatim, degraded: true, linkId: entityId };
 }

@@ -1,30 +1,23 @@
 -- Melothea CI検証クエリ（フェーズ2a）
--- 正本：~/ai-context/mv/MV_DATABASE.md「整合の強制と正本運用」
 --
--- スキーマ内で張れない「テーブル間整合」を、ビルド冒頭で違反行を返すSELECT群として検査する。
--- 一行でも返ればビルドを失敗させる（公開への唯一の関門）。各行は自己識別できるよう
---   第1列＝check名 / 第2列＝違反行id / 第3列＝該当値 の形で返す。
+-- テーブル間整合を、違反行を返すSELECT群として検査する。一行でも返ればビルド失敗。
+-- 各行は 第1列＝check名 / 第2列＝違反行id / 第3列＝該当値 の形で返す。
 --
--- 実行（接続ごとにFKも固定。CI検証自体はFK非依存だが運用を統一）：
+-- 実行：
 --   sqlite3 <db> "PRAGMA foreign_keys=ON;" ".read db/ci_checks.sql"
---   出力が1行でもあればビルド失敗（呼び出し側で判定）。
 --
 -- 検査対象：
 --   0 サブタイプ×entity_type / 1 name_type × entity_type（title は楽曲＋被参照MVのみ）/
 --   2 memberships.member型 / 3 credits二表の参加者型 / 4 出演個人原則 /
 --   5 derives_from 非循環・同一entity内 / 6 期間の正気度 /
---   7 mv_credits.role・video_type の語彙リスト照合 / 8 完全重複行（親表・出典子表の二重投入検出） /
+--   7 mv_credits.role・video_type の語彙リスト照合 / 8 完全重複行 /
 --   9 出典層の整合：
 --     (a) 子テーブル対象10表の各行に対応する出典子テーブル行が1件以上（mv_songs は対象外）
 --     (b) source_labels の volatile=0 のラベル集合が {'disc','video_disc'} と一致
 --     (d) mvs.title_name_id の参照先 names が当該MV自身の title 行であること
---   ※旧「source記述規約の書式検査」は出典層への移行完了に伴い撤去。
 
 -- ============================================================
 -- 0. サブタイプ表 × entity_type の照合
---    サブタイプ表×entity_typeの照合（2026/07/05承認。ER図の検証対象外だったサブタイプ整合を
---    CI側で受ける）。people/groups/songs/mvs.id は entities(id) を参照するがFKは entity_type の
---    一致を強制しないため、entity_type の正しさに依存する項目1〜4の土台としてここで検査する。
 -- ============================================================
 SELECT 'subtype_entity_type' AS check_name, x.id AS id, x.detail AS detail
 FROM (
@@ -83,8 +76,7 @@ FROM mv_credits mc
 JOIN entities e ON e.id = mc.entity_id
 WHERE e.entity_type NOT IN ('person','group');
 
--- song_artists.entity_id も「人物またはグループ」（DATABASE明文：entities参照＋CI検証）。
--- 項目3の列挙漏れを補う（2026/07/05承認）。
+-- song_artists.entity_id の型（person または group のみ）
 SELECT 'song_artist_participant_type' AS check_name, sa.id AS id,
        'entity_id='||sa.entity_id||' entity_type='||e.entity_type||' role='||sa.role AS detail
 FROM song_artists sa
@@ -119,9 +111,9 @@ WITH RECURSIVE walk(start_id, cur_id, depth) AS (
   SELECT w.start_id, n.derives_from_name_id, w.depth + 1
   FROM walk w
   JOIN names n ON n.id = w.cur_id
-  WHERE w.cur_id <> w.start_id           -- 起点に戻ったら展開停止（循環確定）
+  WHERE w.cur_id <> w.start_id           -- 起点に戻ったら展開停止
     AND w.cur_id IS NOT NULL
-    AND w.depth < 100                     -- 暴走ガード
+    AND w.depth < 100
 )
 SELECT 'derives_from_cycle' AS check_name, start_id AS id,
        'cycle back to self within '||depth||' hop(s)' AS detail
@@ -129,7 +121,7 @@ FROM walk
 WHERE cur_id = start_id;
 
 -- ============================================================
--- 6. 期間の正気度（ISO 8601部分日付は文字列比較で単調）
+-- 6. 期間の正気度
 -- ============================================================
 SELECT 'names_period_order' AS check_name, id AS id,
        'valid_from='||valid_from||' > valid_to='||valid_to AS detail
@@ -153,9 +145,6 @@ WHERE active_from IS NOT NULL AND active_to IS NOT NULL AND active_from > active
 
 -- ============================================================
 -- 6b. ended 整合（終了日があるのに ended=0）
---     終了日（valid_to／left／end_date）がNOT NULLなら終了済みのはずで ended=1 が整合。
---     DATABASE「endedは終了済み日付不明と継続中の区別」からの解釈による追加（2026/07/05承認。
---     明文なし）。逆（ended=1 かつ日付NULL＝終了済み日付不明）は正当なので検査しない。
 -- ============================================================
 SELECT 'names_ended_flag' AS check_name, id AS id,
        'valid_to='||valid_to||' but ended=0' AS detail
@@ -178,9 +167,9 @@ FROM group_activity_periods
 WHERE active_to IS NOT NULL AND ended = 0;
 
 -- ============================================================
--- 7. 語彙リスト照合（観測が増やす開いた語彙。設計側CHECKは張らずここで受ける）
---    当面：mv_credits.role ∈ {director,appearance,choreographer,cinematographer}
---          mvs.video_type ∈ {music_video}（NULLは観測なしとして許容）
+-- 7. 語彙リスト照合
+--    mv_credits.role ∈ {director,appearance,choreographer,cinematographer}
+--    mvs.video_type ∈ {music_video}（NULLは許容）
 -- ============================================================
 SELECT 'mv_credit_role_vocab' AS check_name, id AS id, 'role='||role AS detail
 FROM mv_credits
@@ -191,12 +180,9 @@ FROM mvs
 WHERE video_type IS NOT NULL AND video_type NOT IN ('music_video');
 
 -- ============================================================
--- 8. 完全重複行の検出（id以外の全列一致＝二重投入ミス。近似重複は対象外）
+-- 8. 完全重複行の検出（id以外の全列一致＝二重投入ミス）
 --    各表で全非id列をPARTITIONし、最小id以外を違反として返す。
---    対象は関係テーブル・生記述層・names と、出典子テーブル10枚。エンティティ表
---    （entities/people/groups/songs/mvs）は除外する：draft段階の別エンティティが全列一致し得る
---    （例：属性未入力のpeople行が複数）ため、完全一致を二重投入と断じると正当な別人・別作品を
---    誤検出する。エンティティの重複はid（公開ID）で区別され、内容一致は重複の証拠にならない。
+--    対象は関係テーブル・生記述層・names と、出典子テーブル10枚。エンティティ表は除外。
 -- ============================================================
 SELECT 'dup_row_names' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
@@ -277,8 +263,8 @@ FROM (
   WINDOW w AS (PARTITION BY group_id, active_from, active_to, ended)
 ) WHERE c > 1 AND id <> first_id;
 
--- --- 8b. 出典子テーブル10枚の完全重複行（parent_id含む全非id列一致＝二重投入） ---
---    同一親行に複数出典（1ソース1行）は正当。全列一致のみを重複とみなす。
+-- --- 8b. 出典子テーブル10枚の完全重複行（parent_id含む全非id列一致） ---
+--    全列一致のみを重複とみなす。
 SELECT 'dup_row_names_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
@@ -350,7 +336,7 @@ FROM (
 ) WHERE c > 1 AND id <> first_id;
 
 -- ============================================================
--- 9. 出典層の整合（旧 source 記述規約の書式検査の後継。source列撤去に伴い差し替え）
+-- 9. 出典層の整合
 -- ============================================================
 
 -- (a) 子テーブル対象10表の各行に、対応する出典子テーブル行が1件以上存在すること。

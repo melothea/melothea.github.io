@@ -12,10 +12,7 @@ import { bi, neutralPath, langPath, neutralHome, typeLabel, SITE_NAME } from '..
 import type { EntityRow } from '../lib/db.ts';
 
 export function getStaticPaths() {
-  // status で絞らず draft 行もページ生成する。2aの実データは全行 status='draft' のため、
-  // published のみに絞ると生成ゼロになる——工程疎通を目的とする2aでは全エンティティを出す
-  // 意識的な選択。draft/published による生成・表示の制御（未完データの部分公開）は、
-  // フェーズ3の質の床（出典明記＋照合済み）とあわせて後段で設計する。
+  // status で絞らず draft 行もページ生成する。
   return allEntities().map((e) => ({ params: { id: String(e.id) }, props: { entity: e } }));
 }
 const { entity } = Astro.props as { entity: EntityRow };
@@ -52,10 +49,7 @@ if (entity.entity_type === 'song') {
   });
   // クレジット欄：MVクレジット（監督・出演）に mv_songs 経由の楽曲クレジット（作詞・作曲・編曲）を統合。
   // 単曲MVは1欄に統合、複数楽曲（メドレー）は楽曲ごとに小見出しで分ける。
-  // ※A案：ハブは既存の一律描画（neutralName＝クレジット先エンティティのprimary逐語）に合わせ、
-  //   credited_name_id・atDate を解決しない。名義解決仕様の第1段規則（クレジット文脈では実クレジットの
-  //   逐語名義を常に保持・表示する）からの乖離は認識に残し、乖離が顕在化する検証データを追加した段階で
-  //   ハブのクレジット解決を改めて忠実化する。
+  // ハブは credited_name_id・atDate を解決せず neutralName（primary逐語）で一律描画する。
   const songGroups = mvSongCreditGroups(id);
   const mvCreditLines: Line[] = mvCredits(id).map((r) => ({ roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('mv_credits_sources', r.id) }));
   const songCreditLine = (c: { id: number; role: string; entity_id: number }): Line =>

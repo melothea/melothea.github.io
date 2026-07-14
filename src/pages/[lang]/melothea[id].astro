@@ -4,8 +4,6 @@
 //     ページ言語の確立形（同一系列）／導出があれば主表示に据える。
 //   ・作品（楽曲・映像）の見出し・リンク＝人物文脈。MV は names 行を持たないため mv_songs 経由で
 //     楽曲タイトルから導出する（renderDisplayName で見出しと共用）。
-// 本スライスは全名義 locale=ja・reading=NULL のため、ja ページは確立形（ja primary）ヒット、
-// en ページは逐語（lang=ja）＋リンクに劣化する（設計どおり）。
 import Base from '../../layouts/Base.astro';
 import SourceList from '../../components/SourceList.astro';
 import {
@@ -23,8 +21,7 @@ import {
 import type { EntityRow } from '../../lib/db.ts';
 
 export function getStaticPaths() {
-  // status で絞らず draft 行もページ生成する（2aは全行 draft。工程疎通のための意識的選択。
-  // draft/published による生成・表示制御はフェーズ3の質の床とあわせて後段で設計）。言語×全エンティティ。
+  // status で絞らず draft 行もページ生成する。言語×全エンティティ。
   return LOCALES.flatMap((lang) =>
     allEntities().map((e) => ({ params: { lang, id: String(e.id) }, props: { entity: e, lang } })),
   );
@@ -101,7 +98,7 @@ if (entity.entity_type === 'song') {
     }
   }
 } else {
-  // person / group：2節に再編（リンク先は作品＝人物文脈で解決）。
+  // person / group：2節構成（リンク先は作品＝人物文脈で解決）。
   // 節1 映像での関与（Music video work）：mv_credits 由来（出演・監督）に song_artists→mv_songs 導出の
   //   アーティストを統合。各行に mvs.production_year を併記（NULLは省略）。
   sections.push({
@@ -111,8 +108,8 @@ if (entity.entity_type === 'song') {
       ...artistMvsOf(id).map((r) => ({ roleKey: 'main', targetId: r.mvId, sources: r.sources, context: 'entity' as const, year: getMv(r.mvId)?.production_year ?? null })),
     ],
   });
-  // 節2 楽曲（Songs）：song_artists(main)＋song_credits(全role)を楽曲ごとに集約（旧 As artist／
-  //   Song credits 節を置換）。役割は Artist系→作詞→作曲→編曲→プロデュース順、release_year 併記。
+  // 節2 楽曲（Songs）：song_artists(main)＋song_credits(全role)を楽曲ごとに集約。
+  //   役割は Artist系→作詞→作曲→編曲→プロデュース順、release_year 併記。
   for (const g of entitySongRoles(id)) {
     songRoleGroups.push({ songId: g.songId, year: getSong(g.songId)?.release_year ?? null, roles: g.roles });
   }

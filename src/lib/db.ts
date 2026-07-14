@@ -1,21 +1,18 @@
-// ビルド時のSQLite正本アクセス（正本仕様：~/ai-context/mv/MV_DATABASE.md）。
+// ビルド時のSQLite DBアクセス。
 //
-// Node 24 標準の node:sqlite を用いる（ネイティブ依存 better-sqlite3 を持ち込まない＝各マシンの
-// 再現性コストを下げる）。読み取り専用で開き、CLAUDE.md 規律2に従い接続で foreign_keys を固定する。
-// 正本は db/melothea.db 一本（JSONLダンプは導出物で読まない）。
+// Node 24 標準の node:sqlite を用いる。読み取り専用で開き、接続で foreign_keys を固定する。
+// DBは db/melothea.db（JSONLダンプは読まない）。
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'node:path';
 
-// プロジェクトルート基準で解決する。ビルド時はモジュールが dist/.prerender/chunks/ にバンドルされ
-// import.meta.url 基準の相対解決がずれるため使わない。astro build / dev は常にリポジトリルートが
-// cwd（package.json のある場所）で走る。必要なら MELOTHEA_DB で上書き可能。
+// プロジェクトルート（cwd）基準で解決する。必要なら MELOTHEA_DB で上書き可能。
 const dbPath = process.env.MELOTHEA_DB ?? join(process.cwd(), 'db', 'melothea.db');
 
 const db = new DatabaseSync(dbPath, {
   readOnly: true,
-  enableForeignKeyConstraints: true, // node:sqlite の既定は true だが明示する
+  enableForeignKeyConstraints: true,
 });
-db.exec('PRAGMA foreign_keys = ON;'); // CLAUDE.md 規律2：接続ごとに固定
+db.exec('PRAGMA foreign_keys = ON;'); // 接続ごとに固定
 
 export function query<T>(sql: string, ...params: Array<string | number | null>): T[] {
   return db.prepare(sql).all(...params) as T[];

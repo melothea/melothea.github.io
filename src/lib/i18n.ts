@@ -1,4 +1,4 @@
-// 表示ラベルとURL補助（正本のURL設計：MV_ROADMAP.md フェーズ0）。
+// 表示ラベルとURL補助。
 // ラベルはUIのchrome（言語依存）。エンティティ／役割の語彙キー自体は言語中立の識別子であり、
 // 言語中立ハブではキーと逐語名をそのまま出す（下の label は言語ページ専用）。
 
@@ -15,7 +15,7 @@ export const langPath = (lang: Lang, id: number) => `/${lang}/melothea${id}/`;
 export const langHome = (lang: Lang) => `/${lang}/`;
 export const neutralHome = () => `/`;
 
-// 言語中立ハブの二言語併記ラベル（どちらの言語も特権化しない）
+// 言語中立ハブの二言語併記ラベル
 export const bi = (ja: string, en: string) => `${ja} / ${en}`;
 
 export const SITE_NAME = 'Melothea';

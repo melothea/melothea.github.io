@@ -1,25 +1,16 @@
 -- Melothea MVアーカイブ スキーマ（フェーズ2a）
--- 正本：~/ai-context/mv/MV_DATABASE.md（本ファイルはそのDDL化。乖離に気づいたら実装せず質問）
 --
 -- 構文検査（スキーマ変更時は毎回通す）：
 --   sqlite3 ":memory:" ".read db/schema.sql"
 --
--- 語彙の線引き（2026/07/05 承認）：
---   設計が決める閉じた語彙 → スキーマCHECK（本ファイル）
---   観測が増やす開いた語彙 → CI検証の語彙リスト（db/ci_checks.sql、手順2）
---     ・mv_credits.role（当面：director/appearance/choreographer/cinematographer）
---     ・mvs.video_type（当面：music_video）
---
--- 主キー方針（DATABASE「公開IDと内部キーの線引き」／ER図「未規定」を2026/07/05確定）：
+-- 主キー方針：
 --   entities.id のみ AUTOINCREMENT（公開ID melothea{n} の供給源。削除idの再利用を禁止）
---   people/groups/songs/mvs.id は entities(id) を兼ねる素のPK（識別関係）
---   関係テーブル・生記述層は代理キー id INTEGER PRIMARY KEY（ローカル内部キー）。UNIQUE当面なし
+--   people/groups/songs/mvs.id は entities(id) を兼ねる素のPK
+--   関係テーブル・生記述層は代理キー id INTEGER PRIMARY KEY。UNIQUE当面なし
 --
--- 出典：一次エンティティのクレジット・生記述は出典明記が質の床（ROADMAPフェーズ3）。
---   旧 source 列（各親表の TEXT NOT NULL）は出典層（{親表名}_sources）へ移行して撤去済み。
---   出典は親表ごとの子テーブルが 1 出典 1 行で保持する（本ファイル末尾の出典層を参照）。
+-- 出典：親表ごとの子テーブル（{親表名}_sources）が 1 出典 1 行で保持する（本ファイル末尾）。
 --
--- 外部キーはSQLiteでは接続ごとに要有効化。投入スクリプト・ビルドの双方で固定する（下記PRAGMA）。
+-- 外部キーは接続ごとに有効化する（下記PRAGMA）。
 
 PRAGMA foreign_keys = ON;
 
@@ -69,19 +60,19 @@ CREATE TABLE songs (
 
 CREATE TABLE mvs (
   id                 INTEGER PRIMARY KEY REFERENCES entities(id),
-  video_type         TEXT,                             -- 種別。観測できないとき推測で埋めないためNULL可。CI語彙リストで照合（CHECKなし）
+  video_type         TEXT,                             -- 種別。NULL可。CI語彙リストで照合（CHECKなし）
   production_year    INTEGER,                          -- 制作年はMV側。楽曲との紐付けはmv_songs経由
   status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),
   description        TEXT,
   description_source TEXT CHECK (description_source IN ('ai','manual','ai_edited')),
   wikidata_qid       TEXT,
   mbid               TEXT,
-  title_name_id      INTEGER REFERENCES names(id),      -- 代表題の名義行（表示題の正本。既存行はNULL）
+  title_name_id      INTEGER REFERENCES names(id),      -- 代表題の名義行（表示題の基準。既存行はNULL）
   CHECK (description IS NOT NULL OR description_source IS NULL)
 );
 
 -- ============================================================
--- names（名義・表記。DATABASE のDDLを逐語転記）
+-- names（名義・表記）
 -- ============================================================
 
 CREATE TABLE names (
@@ -104,12 +95,12 @@ CREATE UNIQUE INDEX idx_names_primary
   ON names(entity_id, locale) WHERE is_primary = 1;
 
 -- ============================================================
--- 関係テーブル（代理キー id。FK先の使い分けはDATABASE「関係テーブル」節）
+-- 関係テーブル（代理キー id）
 -- ============================================================
--- 出典は各親表の子テーブル（{親表名}_sources）が持つ。旧 source 列は移行して撤去済み。
+-- 出典は各親表の子テーブル（{親表名}_sources）が持つ。
 
--- 在籍関係。group_idはgroups直参照、member_idは多態のためentities参照（＋CI検証）。
--- UNIQUE(member_id, group_id)は張らない（脱退→再加入で複数行）。
+-- 在籍関係。group_idはgroups直参照、member_idはentities参照（＋CI検証）。
+-- UNIQUE(member_id, group_id)は張らない。
 CREATE TABLE memberships (
   id        INTEGER PRIMARY KEY,
   group_id  INTEGER NOT NULL REFERENCES groups(id),
@@ -164,7 +155,7 @@ CREATE TABLE group_activity_periods (
 );
 
 -- ============================================================
--- 生記述層（保持と解決の分離。解決リンクはNULL可・後送り）
+-- 生記述層（解決リンクはNULL可・後送り）
 -- ============================================================
 
 CREATE TABLE crew_raw (
@@ -194,7 +185,7 @@ CREATE TABLE mv_artist_raw (
 );
 
 -- ============================================================
--- 出典層（source記述規約の後継。旧 source 列は移行完了・撤去済み）
+-- 出典層
 -- ============================================================
 -- 統制語彙。volatile=1 は内容が変わり得る出典（URL・確認日時が意味を持つ）。
 CREATE TABLE source_labels (
@@ -213,7 +204,7 @@ INSERT INTO source_labels(label, volatile) VALUES
   ('editor_verified', 1);
 
 -- 各親表の出典子テーブル {親表名}_sources。列・CHECKは全10枚に同一に付す。
---   日付   ：referenced_at は disc/video_disc 以外で必須（現物確認は確認日を持たない）
+--   日付   ：referenced_at は disc/video_disc 以外で必須
 --   URL    ：disc/video_disc/editor_verified は url NULL、それ以外は url 必須
 --   記述子 ：editor_verified は descriptor NULL、それ以外は descriptor 必須
 --   記録   ：editor_verified は record_ref 必須（私有記録の参照キー）、それ以外は NULL

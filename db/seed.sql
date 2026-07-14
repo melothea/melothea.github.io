@@ -1,21 +1,6 @@
 -- Melothea シードデータ（フェーズ2a：CS Channel期3本）草案
--- 正本：~/ai-context/mv/PHASE2.md「シードデータ（2a）」
 --
--- source列はPHASE2の逐語、および2026/07/05確定の収集元→最終確認先を用いる。
--- 【2026/07/05確定事項の反映】
---     - names 10行を投入。収集時ソース＝全行共通「rockinon.com 2011/8/31記事（全名・全題の逐語表記）」、
---       最終確認先＝人物/グループは公式表記（児玉裕一はvivisionプロフィール）、楽曲題は映像本体・公式ディスコグラフィ
---     - reading は全行NULL（出典必須のため手順7(e)へ送る）
---     - 浮雲の credited_name_id 明示指定を M2・M3 両方に付与（併存名義は期間導出が効かないため）
---     - status は全行スキーマ既定の draft、video_type は全3本 music_video
--- 【未投入・手順7へ送る】
---     - 楽曲の公式英題・ローマ字題の有無（2aでは調査せず。存在確認されたら names に加算）… 手順7(d)
---     - names 各行の reading 出典 … 手順7(e)
---     - S3 arranger（未取得。取れたら版由来つきで追加）
---
--- 【ID発番】pull後の最新状態からの連番（並行発番なし）。本草案の割当（melothea1..13）は
---   未公開のため可逆。順序はPHASE2 entities表の記載順（P1..P6, G1, S1..S3, M1..M3）。
---   entities.id は AUTOINCREMENT だが、割当を固定するため明示idで投入する。
+-- ID は明示指定で投入する（melothea1..13）。
 
 PRAGMA foreign_keys = ON;
 
@@ -39,13 +24,13 @@ INSERT INTO entities(id, entity_type) VALUES
 
 INSERT INTO people(id) VALUES (1),(2),(3),(4),(5),(6);
 
--- 東京事変の活動期間（begin/end）は2a範囲外（membershipsと同じく一周疎通後に追加）。NULLで投入。
+-- 東京事変の活動期間（begin/end）は2a範囲外。NULLで投入。
 INSERT INTO groups(id) VALUES (7);
 
 INSERT INTO songs(id, release_year) VALUES
-  (8, 2009),      -- 能動的三分間：配信2009/11/17、CDシングル2009/12/2
-  (9, 2011),      -- 空が鳴っている：シングル2011/5/11
-  (10, 2011);     -- ハンサム過ぎて：2011/8/31配信
+  (8, 2009),      -- 能動的三分間
+  (9, 2011),      -- 空が鳴っている
+  (10, 2011);     -- ハンサム過ぎて
 
 INSERT INTO mvs(id, video_type, production_year) VALUES
   (11, 'music_video', 2009),
@@ -54,8 +39,7 @@ INSERT INTO mvs(id, video_type, production_year) VALUES
 
 -- ============================================================
 -- names（各エンティティの ja primary。act_name＝人物/グループ、title＝楽曲）
---   reading は全行NULL（出典必須のため手順7(e)）。origin=original、locale=ja、is_primary=1。
---   source＝収集時「rockinon.com 2011/8/31記事（全名・全題の逐語表記）」→ 最終確認先。
+--   reading は全行NULL。origin=original、locale=ja、is_primary=1。
 -- ============================================================
 INSERT INTO names(id, entity_id, name_text, lang, locale, is_primary, name_type, origin, source) VALUES
   (1, 1, '児玉裕一',   'ja','ja',1,'act_name','original','rockinon.com 2011/8/31記事（全名・全題の逐語表記）→ vivisionプロフィール（公式表記）'),
@@ -78,9 +62,7 @@ INSERT INTO song_artists(song_id, entity_id, role, source) VALUES
   (10,7, 'main', '収録盤 → 映像本体');
 
 -- ============================================================
--- song_credits（entity_id。訂正後スキーマ）
---   G1(東京事変) arranger 行＝グループ参加の発火点。歌ネットは版を特定しないため版名は書かず、
---   版未特定である旨と最終確認先を明記する（DATABASE規律：版由来を必ず明記）。
+-- song_credits
 -- ============================================================
 INSERT INTO song_credits(song_id, entity_id, role, source) VALUES
   (8, 2, 'lyricist', '歌ネット（NexTone許諾表記あり）→ 収録盤ブックレット'),
@@ -91,12 +73,11 @@ INSERT INTO song_credits(song_id, entity_id, role, source) VALUES
   (9, 7, 'arranger', '歌ネット「編曲：東京事変」（版未特定）→ 最終確認時に音源収録盤ブックレット（シングル盤／アルバム）で版を特定'),
   (10,1, 'lyricist', '歌ネット・J-Lyric、rockinon.com 2011/8/31（椎名林檎作曲・児玉裕一作詞と明記）→ 収録盤ブックレット'),
   (10,2, 'composer', '歌ネット・J-Lyric、rockinon.com 2011/8/31（椎名林檎作曲・児玉裕一作詞と明記）→ 収録盤ブックレット');
-  -- S3 arranger は未取得のまま置く（取れたら版由来つきで追加）
+  -- S3 arranger は未取得。
 
 -- ============================================================
--- mv_credits（entity_id。訂正後スキーマ）
---   credited_name_id は本草案では全行NULL（浮雲の明示指定は names 投入後にUPDATE）。
---   source は各行が自己完結する完全文字列（他行参照の「同上」は用いない）。
+-- mv_credits
+--   credited_name_id は全行NULL（浮雲は names 投入後にUPDATE）。
 -- ============================================================
 INSERT INTO mv_credits(mv_id, entity_id, role, source) VALUES
   -- director
@@ -125,7 +106,7 @@ INSERT INTO mv_songs(mv_id, song_id, position, source) VALUES
   (13,10, 1, 'CS Channel収録事実（タワーレコードニュース2011/7/15等）→ 映像本体');
 
 -- ============================================================
--- 浮雲の当時名義の明示指定（併存名義のため期間導出に委ねない）。
+-- 浮雲の当時名義の明示指定。
 --   M2(mv=12)・M3(mv=13) の浮雲(entity=4) appearance 行を浮雲名義行(names.id=4)に結線。
 -- ============================================================
 UPDATE mv_credits

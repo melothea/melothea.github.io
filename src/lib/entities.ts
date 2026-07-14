@@ -1,4 +1,4 @@
-// エンティティのビュー層：関係の取得・MV表示名の導出・逐語名の供給（正本：MV_DATABASE.md）。
+// エンティティのビュー層：関係の取得・MV表示名の導出・逐語名の供給。
 // 名義の言語別解決は names.ts（4段カスケード）が担い、ここは構造（どの関係が誰を指すか）を返す。
 
 import {
@@ -75,7 +75,7 @@ export function primaryNameRow(entityId: number): NameRow | undefined {
   ) ?? queryOne<NameRow>('SELECT * FROM names WHERE entity_id = ? AND is_primary = 1 LIMIT 1', entityId);
 }
 
-/** MV の表示名は mv_songs 経由で楽曲名から導出（確定事項：MVに独立の固有名を持たせない）。
+/** MV の表示名は mv_songs 経由で楽曲名から導出。
  *  複数楽曲（メドレー）なら position 順の逐語 title 行を返す。 */
 export function mvTitleRows(mvId: number): NameRow[] {
   return query<NameRow>(
@@ -139,8 +139,7 @@ export function mvSongCreditGroups(mvId: number): { songId: number; credits: Son
 }
 
 /** MV のアーティスト：mv_songs 経由の収録楽曲の song_artists role='main' を重複なし導出。
- *  メドレー（複数楽曲）は position 順に走査し entity_id で重複除去。featured は含めない
- *  （実例投入時に条件付き表示を実装予定）。 */
+ *  メドレー（複数楽曲）は position 順に走査し entity_id で重複除去。featured は含めない。 */
 export function mvMainArtists(mvId: number): SongArtistRow[] {
   const rows = query<SongArtistRow>(
     `SELECT sa.* FROM song_artists sa
@@ -231,7 +230,7 @@ type MembershipRow = {
 };
 
 /** 1区間の期間文字列。to=NULL は開区間（ended=0）のみ「YYYY–」。to=NULL かつ ended=1 は
- *  描画未定義のため停止（共通規則）。 */
+ *  描画未定義のため停止。 */
 function periodText(from: string | null, to: string | null, ended: number): string {
   if (to == null && ended === 1) {
     throw new Error(`period undefined (from=${from}, to=NULL, ended=1): 描画未定義。共通規則により停止`);
