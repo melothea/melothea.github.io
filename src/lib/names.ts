@@ -1,6 +1,6 @@
 // 名義表示の4段カスケード。ビルド時導出（導出値はDBに書き込まない）。
 //   1. 逐語（クレジット文脈では常に保持・表示）
-//   2. ページ言語localeの確立形（クレジット文脈は derives_from 同一系列に限る）
+//   2. ページ言語localeの確立形（entity_id + locale + is_primary による直接参照）
 //   3. 言語別フォールバック（現データでは未発火）
 //   4. 導出転写（origin='original' かつ reading 等の入力があるとき。無ければ逐語へ劣化）
 
@@ -34,47 +34,6 @@ function localePrimary(entityId: number, lang: Lang): NameRow | undefined {
     entityId,
     lang,
   )[0];
-}
-
-/** aId と bId が同一 entity 内で derives_from により連結された同一系列か（自己参照は連結）。 */
-function sameSeries(entityId: number, aId: number, bId: number): boolean {
-  if (aId === bId) return true;
-  const adj = new Map<number, number[]>();
-  const link = (x: number, y: number) => {
-    const a = adj.get(x);
-    if (a) a.push(y);
-    else adj.set(x, [y]);
-  };
-  for (const r of namesOf(entityId)) {
-    if (r.derives_from_name_id != null) {
-      link(r.id, r.derives_from_name_id);
-      link(r.derives_from_name_id, r.id);
-    }
-  }
-  const seen = new Set<number>([aId]);
-  const stack = [aId];
-  while (stack.length) {
-    const cur = stack.pop()!;
-    if (cur === bId) return true;
-    for (const nx of adj.get(cur) ?? []) {
-      if (!seen.has(nx)) {
-        seen.add(nx);
-        stack.push(nx);
-      }
-    }
-  }
-  return false;
-}
-
-/** クレジット文脈の2段目：ページ言語localeの確立形のうち、クレジット逐語行と同一系列のものを採用
- *  （primary を優先）。系列一致が無ければ undefined＝次段へ倒す。 */
-function establishedInSeries(entityId: number, lang: Lang, verbatimId: number): NameRow | undefined {
-  const candidates = query<NameRow>(
-    'SELECT * FROM names WHERE entity_id = ? AND locale = ? ORDER BY is_primary DESC, id',
-    entityId,
-    lang,
-  );
-  return candidates.find((c) => sameSeries(entityId, c.id, verbatimId));
 }
 
 /** 4段目：導出転写。発火条件を満たさなければ undefined（＝逐語へ劣化）。 */
@@ -148,7 +107,7 @@ export function renderCredit(
     ? { text: verbatimRow.name_text, lang: verbatimRow.lang }
     : { text: `melothea${entityId}`, lang };
 
-  // 2段目：同一系列の確立形のみ採用（系列不一致は採用せず次段へ）。
+  // 2段目：ページ言語localeの確立形を entity_id + locale + is_primary で直接参照。
   const est = localePrimary(entityId, lang);
   if (est) {
     const sub = est.name_text !== verbatim.text ? verbatim : undefined;
