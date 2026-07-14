@@ -8,8 +8,7 @@
 |---|---|---|
 | `schema.sql` | DDL（正本仕様のDDL化）。**正本の再構築経路はこれ** | 手動 |
 | `ci_checks.sql` | テーブル間整合のCI検証クエリ（違反行を返すSELECT群） | 手動 |
-| `seed.sql` | フェーズ2a シード（CS Channel期3本） | 手動 |
-| `melothea.db` | SQLite正本（schema→seed から生成） | **SQLiteのみが編集対象** |
+| `melothea.db` | SQLite正本 | **SQLiteのみが編集対象** |
 | `dump/` | JSONLダンプ（自動生成・編集禁止。） | 自動 |
 
 SQLite接続は投入・ビルドとも常に `PRAGMA foreign_keys=ON` を固定する。
@@ -24,17 +23,11 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-## 正本の再構築（schema→seed）
+## スキーマの再構築
 
-```
-rm -f db/melothea.db
-sqlite3 db/melothea.db "PRAGMA foreign_keys=ON;" ".read db/schema.sql" ".read db/seed.sql"
-```
-
-**但し書き：この手順はフェーズ2a初期構築の再現専用。** 正本（`melothea.db`）に直接編集が
-入った後に実行すると、その編集が失われる。以後のデータ編集はSQLite正本に直接行い（制約が
-編集時に発火するため）、`seed.sql` は初期投入の履歴として凍結する（正本運用：DATABASE
-「整合の強制と正本運用」——正本の編集対象はSQLiteのみ）。
+スキーマの再構築経路は `db/schema.sql` のみ。データの編集はSQLite正本
+（`melothea.db`）に直接行う。データの復元は `dump/` からのロードによる
+（後述の「JSONLダンプ」節の記述に従う）。
 
 ## CI検証（一行でも返れば失敗）
 
