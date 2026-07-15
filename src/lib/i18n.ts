@@ -75,7 +75,7 @@ export const releaseTypeLabel: Record<Lang, Record<string, string>> = {
 // セクション見出し等（言語ページ）
 export const ui: Record<Lang, Record<string, string>> = {
   ja: {
-    releaseYear: 'リリース年',
+    release: 'リリース',
     productionYear: '制作年',
     videoType: '種別',
     songs: '楽曲',
@@ -100,7 +100,7 @@ export const ui: Record<Lang, Record<string, string>> = {
     langName: '日本語',
   },
   en: {
-    releaseYear: 'Release year',
+    release: 'Release',
     productionYear: 'Production year',
     videoType: 'Type',
     songs: 'Songs',

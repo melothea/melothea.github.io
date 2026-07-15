@@ -182,9 +182,9 @@ const other = otherLang(lang);
     <dl class="facts">
       {songReleaseRows.map((r) => (
         <>
-          <dt>{L.releaseYear}</dt>
+          <dt>{L.release}</dt>
           <dd>
-            {r.date.slice(0, 4)}{r.releaseType != null && ` ${releaseTypeLabel[lang][r.releaseType] ?? r.releaseType}`}
+            {songReleaseRows.length === 1 ? r.date.slice(0, 4) : r.date}{r.releaseType != null && ` ${releaseTypeLabel[lang][r.releaseType] ?? r.releaseType}`}
             <SourceList sources={r.sources} summary={L.sources} verifiedLabel={L.editorVerified} />
           </dd>
         </>
