@@ -7,7 +7,7 @@ import { allEntities, renderDisplayName, directorEntities } from '../../lib/enti
 import {
   LOCALES, type Lang, neutralHome, langHome, langPath, roleLabel, typeLabel, ui, otherLang, SITE_NAME,
 } from '../../lib/i18n.ts';
-import type { EntityType } from '../../lib/db.ts';
+import type { EntityRow, EntityType } from '../../lib/db.ts';
 
 export function getStaticPaths() {
   return LOCALES.map((lang) => ({ params: { lang }, props: { lang } }));
@@ -15,15 +15,23 @@ export function getStaticPaths() {
 const { lang } = Astro.props as { lang: Lang };
 const L = ui[lang];
 
+const cmpStr = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+// 名前キー（ページ言語での renderDisplayName の main.text）昇順、最後にエンティティ id で整列する。
+const byNameKey = (a: EntityRow, b: EntityRow) =>
+  cmpStr(
+    renderDisplayName(a.id, a.entity_type, lang).main.text,
+    renderDisplayName(b.id, b.entity_type, lang).main.text,
+  ) || a.id - b.id;
+
 const entities = allEntities();
 // 楽曲は一覧から外す（楽曲ページの生成・公開は維持。導線はMVページの楽曲リンク経由）。
 const order: EntityType[] = ['video', 'person', 'group'];
 const groups = order
-  .map((t) => ({ type: t, items: entities.filter((e) => e.entity_type === t) }))
+  .map((t) => ({ type: t, items: entities.filter((e) => e.entity_type === t).slice().sort(byNameKey) }))
   .filter((g) => g.items.length > 0);
 // 監督＝video_credits role='director' の重複なし導出（属性は保存しない・ビルド時）。人物・グループの
 // 全量一覧の上位に置く（全量一覧は残す）。
-const directors = directorEntities();
+const directors = directorEntities().slice().sort(byNameKey);
 
 const alternates = [
   { hreflang: 'x-default', path: neutralHome() },
@@ -49,7 +57,6 @@ const other = otherLang(lang);
           return (
             <li>
               <a href={langPath(lang, e.id)} lang={r.main.lang}>{r.main.text}</a>
-              <span class="role"> melothea{e.id}</span>
             </li>
           );
         })}
@@ -66,7 +73,6 @@ const other = otherLang(lang);
           return (
             <li>
               <a href={langPath(lang, e.id)} lang={r.main.lang}>{r.main.text}</a>
-              <span class="role"> melothea{e.id}</span>
             </li>
           );
         })}
@@ -83,7 +89,6 @@ const other = otherLang(lang);
           return (
             <li>
               <a href={langPath(lang, e.id)} lang={r.main.lang}>{r.main.text}</a>
-              <span class="role"> melothea{e.id}</span>
             </li>
           );
         })}

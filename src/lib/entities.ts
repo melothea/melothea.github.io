@@ -55,6 +55,36 @@ export function sourcesFor(childTable: SourceChildTable, parentId: number): Sour
   }));
 }
 
+// ---- 並び規則の共通ユーティリティ（役割優先順・名前キー比較・年比較） ----
+
+/** 役割優先順：director, appearance, main, featured, lyricist, composer, arranger, producer。
+ *  列にないキーは末尾扱い。 */
+const ROLE_ORDER = [
+  'director',
+  'appearance',
+  'main',
+  'featured',
+  'lyricist',
+  'composer',
+  'arranger',
+  'producer',
+];
+export function roleRank(roleKey: string): number {
+  const i = ROLE_ORDER.indexOf(roleKey);
+  return i < 0 ? ROLE_ORDER.length : i;
+}
+
+/** 名前キー比較：素のコードポイント比較の昇順。 */
+export const cmpStr = (a: string, b: string): number => (a < b ? -1 : a > b ? 1 : 0);
+
+/** 年比較：null は末尾、末尾内は呼び出し側で名前キー比較を続ける。 */
+export function cmpYearNullLast(a: string | null, b: string | null): number {
+  if (a == null && b == null) return 0;
+  if (a == null) return 1;
+  if (b == null) return -1;
+  return cmpStr(a, b);
+}
+
 export function allEntities(): EntityRow[] {
   return query<EntityRow>('SELECT id, entity_type FROM entities ORDER BY id');
 }
@@ -149,12 +179,24 @@ export const songArtists = (songId: number) =>
   query<SongArtistRow>('SELECT * FROM song_artists WHERE song_id = ? ORDER BY id', songId);
 export const songCredits = (songId: number) =>
   query<SongCreditRow>('SELECT * FROM song_credits WHERE song_id = ? ORDER BY id', songId);
-export const videosOfSong = (songId: number) =>
-  query<VideoSongRow>('SELECT * FROM video_songs WHERE song_id = ? ORDER BY id', songId);
+/** 楽曲に収録された MV：MV の導出年（videoYear）昇順、タイは名前キー（ページ言語でのMV表示名）、
+ *  年 null は末尾（末尾内名前キー）、最後に video_id で整列する。 */
+export function videosOfSong(songId: number, lang: Lang): VideoSongRow[] {
+  const rows = query<VideoSongRow>('SELECT * FROM video_songs WHERE song_id = ? ORDER BY id', songId);
+  return rows
+    .map((r) => ({
+      r,
+      year: videoYear(r.video_id),
+      nameKey: renderDisplayName(r.video_id, 'video', lang).main.text,
+    }))
+    .sort(
+      (a, b) =>
+        cmpYearNullLast(a.year, b.year) || cmpStr(a.nameKey, b.nameKey) || a.r.video_id - b.r.video_id,
+    )
+    .map((x) => x.r);
+}
 
 // 人物・グループページ：関与の逆引き
-export const videoCreditsOfEntity = (entityId: number) =>
-  query<VideoCreditRow>('SELECT * FROM video_credits WHERE entity_id = ? ORDER BY video_id, id', entityId);
 export const songCreditsOfEntity = (entityId: number) =>
   query<SongCreditRow>('SELECT * FROM song_credits WHERE entity_id = ? ORDER BY song_id, id', entityId);
 export const songArtistOf = (entityId: number) =>
@@ -192,11 +234,21 @@ export function videoMainArtists(videoId: number): SongArtistRow[] {
   return out;
 }
 
-/** アーティストとして紐づく MV の逆引き：song_artists role='main' → video_songs を JOIN し、
- *  当該エンティティが main アーティストの MV を video_id で重複除去。出典は帰属を担う
- *  song_artists 行の子テーブル（song_artists_sources）から採る。featured は含めない。 */
-export function artistVideosOf(entityId: number): { videoId: number; sources: SourceEntry[] }[] {
-  const rows = query<{ video_id: number; sa_id: number }>(
+/** 人物・グループの映像での関与を MV ごとに集約：video_credits の行（役割と
+ *  video_credits_sources）と、アーティスト導出（song_artists role='main' と video_songs の結合。
+ *  出典は当該 song_artists 行の song_artists_sources。役割キーは 'main'）を video_id でグループ化し、
+ *  各 MV の役割エントリ（roleKey＋sources）を役割優先順に整列する。行の並びは MV の導出年
+ *  （videoYear）昇順、タイは名前キー（ページ言語での MV 表示名）、年 null は末尾（末尾内名前キー）、
+ *  最後に video_id。 */
+export function entityVideoRoles(
+  entityId: number,
+  lang: Lang,
+): { videoId: number; year: string | null; roles: { roleKey: string; sources: SourceEntry[] }[] }[] {
+  const credits = query<VideoCreditRow>(
+    'SELECT * FROM video_credits WHERE entity_id = ? ORDER BY video_id, id',
+    entityId,
+  );
+  const artistRows = query<{ video_id: number; sa_id: number }>(
     `SELECT ms.video_id AS video_id, sa.id AS sa_id
        FROM song_artists sa
        JOIN video_songs ms ON ms.song_id = sa.song_id
@@ -204,23 +256,35 @@ export function artistVideosOf(entityId: number): { videoId: number; sources: So
       ORDER BY ms.video_id, ms.id`,
     entityId,
   );
-  const seen = new Set<number>();
-  const out: { videoId: number; sources: SourceEntry[] }[] = [];
-  for (const r of rows) {
-    if (!seen.has(r.video_id)) {
-      seen.add(r.video_id);
-      out.push({ videoId: r.video_id, sources: sourcesFor('song_artists_sources', r.sa_id) });
-    }
-  }
-  return out;
+  const byVideo = new Map<number, { roleKey: string; sources: SourceEntry[] }[]>();
+  const add = (videoId: number, roleKey: string, sources: SourceEntry[]) => {
+    const list = byVideo.get(videoId) ?? [];
+    list.push({ roleKey, sources });
+    byVideo.set(videoId, list);
+  };
+  for (const r of credits) add(r.video_id, r.role, sourcesFor('video_credits_sources', r.id));
+  for (const r of artistRows) add(r.video_id, 'main', sourcesFor('song_artists_sources', r.sa_id));
+  return [...byVideo.keys()]
+    .map((videoId) => ({
+      videoId,
+      year: videoYear(videoId),
+      nameKey: renderDisplayName(videoId, 'video', lang).main.text,
+      roles: byVideo.get(videoId)!.slice().sort((x, y) => roleRank(x.roleKey) - roleRank(y.roleKey)),
+    }))
+    .sort(
+      (a, b) => cmpYearNullLast(a.year, b.year) || cmpStr(a.nameKey, b.nameKey) || a.videoId - b.videoId,
+    )
+    .map(({ nameKey, ...rest }) => rest);
 }
 
 /** 人物・グループの楽曲関与を楽曲ごとに集約：song_artists role='main'（アーティスト）と
  *  song_credits 全roleを song_id でグループ化。featured は含めない。各楽曲の役割エントリを
- *  Artist系→作詞→作曲→編曲→プロデュース の規定順に整列し、楽曲は song_id 昇順で返す。 */
+ *  役割優先順に整列する。楽曲の並びは楽曲の導出リリース年（songYear）昇順、タイは名前キー
+ *  （ページ言語での楽曲表示名）、年 null は末尾（末尾内名前キー）、最後に song_id。 */
 export function entitySongRoles(
   entityId: number,
-): { songId: number; roles: { roleKey: string; sources: SourceEntry[] }[] }[] {
+  lang: Lang,
+): { songId: number; year: string | null; roles: { roleKey: string; sources: SourceEntry[] }[] }[] {
   const artist = query<SongArtistRow>(
     "SELECT * FROM song_artists WHERE entity_id = ? AND role = 'main' ORDER BY song_id, id",
     entityId,
@@ -229,11 +293,6 @@ export function entitySongRoles(
     'SELECT * FROM song_credits WHERE entity_id = ? ORDER BY song_id, id',
     entityId,
   );
-  const roleOrder = ['main', 'lyricist', 'composer', 'arranger', 'producer'];
-  const rank = (k: string) => {
-    const i = roleOrder.indexOf(k);
-    return i < 0 ? roleOrder.length : i;
-  };
   const bySong = new Map<number, { roleKey: string; sources: SourceEntry[] }[]>();
   const add = (songId: number, roleKey: string, sources: SourceEntry[]) => {
     const list = bySong.get(songId) ?? [];
@@ -243,11 +302,16 @@ export function entitySongRoles(
   for (const r of artist) add(r.song_id, r.role, sourcesFor('song_artists_sources', r.id));
   for (const r of credits) add(r.song_id, r.role, sourcesFor('song_credits_sources', r.id));
   return [...bySong.keys()]
-    .sort((a, b) => a - b)
     .map((songId) => ({
       songId,
-      roles: bySong.get(songId)!.slice().sort((x, y) => rank(x.roleKey) - rank(y.roleKey)),
-    }));
+      year: songYear(songId),
+      nameKey: renderDisplayName(songId, 'song', lang).main.text,
+      roles: bySong.get(songId)!.slice().sort((x, y) => roleRank(x.roleKey) - roleRank(y.roleKey)),
+    }))
+    .sort(
+      (a, b) => cmpYearNullLast(a.year, b.year) || cmpStr(a.nameKey, b.nameKey) || a.songId - b.songId,
+    )
+    .map(({ nameKey, ...rest }) => rest);
 }
 
 // ---- memberships / 活動期間の集約（グループのメンバー節・エンティティの所属節・活動期間facts）----
@@ -271,30 +335,19 @@ function periodText(from: string | null, to: string | null, ended: number): stri
   return `${from ?? ''}${EN_DASH}${to ?? ''}`;
 }
 
-/** 並び用ソートキー：en primary の name_text、不在なら ja primary の name_text（素のコードポイント比較）。 */
-function entitySortKey(entityId: number): string {
-  const en = queryOne<{ name_text: string }>(
-    "SELECT name_text FROM names WHERE entity_id = ? AND locale = 'en' AND is_primary = 1 LIMIT 1",
-    entityId,
-  );
-  if (en) return en.name_text;
-  const ja = queryOne<{ name_text: string }>(
-    "SELECT name_text FROM names WHERE entity_id = ? AND locale = 'ja' AND is_primary = 1 LIMIT 1",
-    entityId,
-  );
-  return ja?.name_text ?? '';
-}
-
-const cmpStr = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-
 export interface PeriodGroup {
   entityId: number; // 相手（member_id または group_id）
   periods: { text: string; sources: SourceEntry[] }[]; // membership_from 昇順
 }
 
-/** memberships 行を「相手」で集約。並び：集約後の最古 membership_from 昇順、タイは entitySortKey の
- *  コードポイント。各グループ内の期間は membership_from 昇順。 */
-function aggregateMemberships(rows: MembershipRow[], otherOf: (r: MembershipRow) => number): PeriodGroup[] {
+/** memberships 行を「相手」で集約。並び：集約後の最古 membership_from 昇順、タイは名前キー
+ *  （ページ言語で解決した相手エンティティの表示文字列）、最後に相手エンティティ id。各グループ内の
+ *  期間は membership_from 昇順。 */
+function aggregateMemberships(
+  rows: MembershipRow[],
+  otherOf: (r: MembershipRow) => number,
+  lang: Lang,
+): PeriodGroup[] {
   const byOther = new Map<number, MembershipRow[]>();
   for (const r of rows) {
     const k = otherOf(r);
@@ -307,33 +360,35 @@ function aggregateMemberships(rows: MembershipRow[], otherOf: (r: MembershipRow)
     return {
       entityId,
       earliest: sorted[0]?.membership_from ?? '',
-      sortKey: entitySortKey(entityId),
+      sortKey: renderDisplayName(entityId, entityTypeOf(entityId)!, lang).main.text,
       periods: sorted.map((r) => ({
         text: periodText(r.membership_from, r.membership_to, r.ended),
         sources: sourcesFor('memberships_sources', r.id),
       })),
     };
   });
-  groups.sort((a, b) => cmpStr(a.earliest, b.earliest) || cmpStr(a.sortKey, b.sortKey));
+  groups.sort(
+    (a, b) => cmpStr(a.earliest, b.earliest) || cmpStr(a.sortKey, b.sortKey) || a.entityId - b.entityId,
+  );
   return groups.map(({ entityId, periods }) => ({ entityId, periods }));
 }
 
 /** グループのメンバー（memberships を member_id で集約）。 */
-export function groupMembers(groupId: number): PeriodGroup[] {
+export function groupMembers(groupId: number, lang: Lang): PeriodGroup[] {
   const rows = query<MembershipRow>(
     'SELECT id, group_id, member_id, membership_from, membership_to, ended FROM memberships WHERE group_id = ? ORDER BY member_id, membership_from, id',
     groupId,
   );
-  return aggregateMemberships(rows, (r) => r.member_id);
+  return aggregateMemberships(rows, (r) => r.member_id, lang);
 }
 
 /** エンティティの所属（memberships を member_id=当該で逆引き、group_id で集約）。 */
-export function entityMemberships(entityId: number): PeriodGroup[] {
+export function entityMemberships(entityId: number, lang: Lang): PeriodGroup[] {
   const rows = query<MembershipRow>(
     'SELECT id, group_id, member_id, membership_from, membership_to, ended FROM memberships WHERE member_id = ? ORDER BY group_id, membership_from, id',
     entityId,
   );
-  return aggregateMemberships(rows, (r) => r.group_id);
+  return aggregateMemberships(rows, (r) => r.group_id, lang);
 }
 
 /** グループの活動期間（group_activity_periods を active_from 昇順）。 */
