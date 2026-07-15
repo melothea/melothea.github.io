@@ -34,7 +34,8 @@ type SourceChildTable =
   | 'song_artists_sources'
   | 'song_credits_sources'
   | 'video_credits_sources'
-  | 'song_release_dates_sources';
+  | 'song_release_dates_sources'
+  | 'video_release_dates_sources';
 
 export function sourcesFor(childTable: SourceChildTable, parentId: number): SourceEntry[] {
   const rows = query<{
@@ -187,6 +188,28 @@ export function videoYear(videoId: number): string | null {
   if (row) return row.date.slice(0, 4);
   const songs = videoSongs(videoId);
   return songs.length === 1 ? songYear(songs[0]!.song_id) : null;
+}
+
+export interface VideoReleaseDateRow {
+  id: number;
+  date: string;
+  releaseType: string | null;
+  sources: SourceEntry[];
+}
+
+/** MV のリリース日行（video_release_dates）を date 昇順・タイ id 昇順で返す。各行に出典
+ *  （video_release_dates_sources）を付ける。 */
+export function videoReleaseDates(videoId: number): VideoReleaseDateRow[] {
+  const rows = query<{ id: number; date: string; release_type: string | null }>(
+    'SELECT id, date, release_type FROM video_release_dates WHERE video_id = ? ORDER BY date, id',
+    videoId,
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    date: r.date,
+    releaseType: r.release_type,
+    sources: sourcesFor('video_release_dates_sources', r.id),
+  }));
 }
 
 // ---- 関係の取得 ----

@@ -9,7 +9,7 @@ import SourceList from '../../components/SourceList.astro';
 import {
   allEntities, getVideo, videoYear, renderDisplayName,
   songArtists, songCredits, videosOfSong, videoSongs, videoCredits, videoSongCreditGroups,
-  videoMainArtists, entityVideoRoles, entitySongRoles, songReleaseDates,
+  videoMainArtists, entityVideoRoles, entitySongRoles, songReleaseDates, videoReleaseDates,
   groupActivityPeriods, groupMembers, entityMemberships,
   entityTypeOf, sourcesFor, roleRank, cmpStr, type SourceEntry,
 } from '../../lib/entities.ts';
@@ -64,6 +64,9 @@ const sortByRoleAndName = (lines: Line[]): Line[] =>
     .sort((a, b) => roleRank(a.ln.roleKey) - roleRank(b.ln.roleKey) || cmpStr(a.name, b.name) || a.ln.id - b.ln.id)
     .map((x) => x.ln);
 
+// MV のリリース日行（facts の「制作年」を単一表示から日付行の列挙に切り替えるかどうかの判定にも使う）。
+const videoReleaseRows = entity.entity_type === 'video' ? videoReleaseDates(id) : [];
+
 if (entity.entity_type === 'song') {
   sections.push({
     title: L.artists,
@@ -80,7 +83,7 @@ if (entity.entity_type === 'song') {
 } else if (entity.entity_type === 'video') {
   const m = getVideo(id);
   const at = videoYear(id);
-  if (at != null) facts.push({ label: L.productionYear, value: at });
+  if (videoReleaseRows.length === 0 && at != null) facts.push({ label: L.productionYear, value: at });
   if (m?.video_type) facts.push({ label: L.videoType, value: videoTypeLabel[lang][m.video_type] ?? m.video_type });
   // アーティスト（見出し直下・クレジット欄より上）：収録楽曲の main を video_songs 経由で導出。
   // 表示名はクレジット文脈（renderCredit・atDate=MVの日付）でページ言語のカスケード解決。
@@ -152,6 +155,20 @@ const other = otherLang(lang);
         {activityPeriods.map((p) => p.text).join(', ')}
         {activityPeriods.map((p) => (<SourceList sources={p.sources} summary={L.sources} verifiedLabel={L.editorVerified} />))}
       </dd>
+    </dl>
+  )}
+
+  {videoReleaseRows.length > 0 && (
+    <dl class="facts">
+      {videoReleaseRows.map((r) => (
+        <>
+          <dt>{L.productionYear}</dt>
+          <dd>
+            {r.date.slice(0, 4)}{r.releaseType != null && ` ${releaseTypeLabel[lang][r.releaseType] ?? r.releaseType}`}
+            <SourceList sources={r.sources} summary={L.sources} verifiedLabel={L.editorVerified} />
+          </dd>
+        </>
+      ))}
     </dl>
   )}
 
