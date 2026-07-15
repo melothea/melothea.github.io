@@ -7,16 +7,16 @@
 import Base from '../../layouts/Base.astro';
 import SourceList from '../../components/SourceList.astro';
 import {
-  allEntities, getVideo, songYear, videoYear, renderDisplayName,
+  allEntities, getVideo, videoYear, renderDisplayName,
   songArtists, songCredits, videosOfSong, videoSongs, videoCredits, videoSongCreditGroups,
-  videoMainArtists, entityVideoRoles, entitySongRoles,
+  videoMainArtists, entityVideoRoles, entitySongRoles, songReleaseDates,
   groupActivityPeriods, groupMembers, entityMemberships,
   entityTypeOf, sourcesFor, roleRank, cmpStr, type SourceEntry,
 } from '../../lib/entities.ts';
 import { renderCredit, type Rendered } from '../../lib/names.ts';
 import {
   LOCALES, type Lang, neutralPath, langPath, langHome,
-  roleLabel, typeLabel, videoTypeLabel, ui, otherLang, SITE_NAME,
+  roleLabel, typeLabel, videoTypeLabel, releaseTypeLabel, ui, otherLang, SITE_NAME,
 } from '../../lib/i18n.ts';
 import type { EntityRow } from '../../lib/db.ts';
 
@@ -65,8 +65,6 @@ const sortByRoleAndName = (lines: Line[]): Line[] =>
     .map((x) => x.ln);
 
 if (entity.entity_type === 'song') {
-  const sy = songYear(id);
-  if (sy != null) facts.push({ label: L.releaseYear, value: sy });
   sections.push({
     title: L.artists,
     lines: sortByRoleAndName(songArtists(id).map((r) => ({ id: r.id, roleKey: r.role, targetId: r.entity_id, sources: sourcesFor('song_artists_sources', r.id), context: 'credit', creditedNameId: r.credited_name_id, atDate: null }))),
@@ -131,6 +129,8 @@ const isGroup = entity.entity_type === 'group';
 const activityPeriods = isGroup ? groupActivityPeriods(id) : [];
 const memberRows = isGroup ? groupMembers(id, lang) : [];
 const membershipRows = entityMemberships(id, lang);
+// 楽曲のリリース日行（facts の「リリース年」を単一表示から日付行の列挙に置き換える）。
+const songReleaseRows = entity.entity_type === 'song' ? songReleaseDates(id) : [];
 
 const pageTitle = `${heading.main.text} — ${SITE_NAME}`;
 const alternates = [
@@ -158,6 +158,20 @@ const other = otherLang(lang);
   {facts.length > 0 && (
     <dl class="facts">
       {facts.map((f) => (<><dt>{f.label}</dt><dd>{f.value}</dd></>))}
+    </dl>
+  )}
+
+  {songReleaseRows.length > 0 && (
+    <dl class="facts">
+      {songReleaseRows.map((r) => (
+        <>
+          <dt>{L.releaseYear}</dt>
+          <dd>
+            {r.date.slice(0, 4)}{r.releaseType != null && ` ${releaseTypeLabel[lang][r.releaseType] ?? r.releaseType}`}
+            <SourceList sources={r.sources} summary={L.sources} verifiedLabel={L.editorVerified} />
+          </dd>
+        </>
+      ))}
     </dl>
   )}
 

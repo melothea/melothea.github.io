@@ -33,7 +33,8 @@ type SourceChildTable =
   | 'group_activity_periods_sources'
   | 'song_artists_sources'
   | 'song_credits_sources'
-  | 'video_credits_sources';
+  | 'video_credits_sources'
+  | 'song_release_dates_sources';
 
 export function sourcesFor(childTable: SourceChildTable, parentId: number): SourceEntry[] {
   const rows = query<{
@@ -150,6 +151,28 @@ export function songYear(songId: number): string | null {
     songId,
   );
   return row ? row.date.slice(0, 4) : null;
+}
+
+export interface SongReleaseDateRow {
+  id: number;
+  date: string;
+  releaseType: string | null;
+  sources: SourceEntry[];
+}
+
+/** 楽曲のリリース日行（song_release_dates）を date 昇順・タイ id 昇順で返す。各行に出典
+ *  （song_release_dates_sources）を付ける。 */
+export function songReleaseDates(songId: number): SongReleaseDateRow[] {
+  const rows = query<{ id: number; date: string; release_type: string | null }>(
+    'SELECT id, date, release_type FROM song_release_dates WHERE song_id = ? ORDER BY date, id',
+    songId,
+  );
+  return rows.map((r) => ({
+    id: r.id,
+    date: r.date,
+    releaseType: r.release_type,
+    sources: sourcesFor('song_release_dates_sources', r.id),
+  }));
 }
 
 /** MV の年：video_release_dates の当該 video_id に行があれば最古行の年。無ければ video_songs が

@@ -66,6 +66,12 @@ export const videoTypeLabel: Record<Lang, Record<string, string>> = {
   en: { music_video: 'Music video' },
 };
 
+// リリース種別語彙 → 表示ラベル（言語ページ）。統制語彙リストは現在空のため写像も空。
+export const releaseTypeLabel: Record<Lang, Record<string, string>> = {
+  ja: {},
+  en: {},
+};
+
 // セクション見出し等（言語ページ）
 export const ui: Record<Lang, Record<string, string>> = {
   ja: {
