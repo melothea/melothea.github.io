@@ -28,3 +28,7 @@
 [28, 14, "HIRAMA MIKIO", "ja-Latn", "en", 1, "act_name", "adapted", null, 11, null, null, 0]
 [29, 20, "\u4ecf\u3060\u3051\u5f92\u6b69", "ja", "ja", 1, "title", "original", null, null, null, null, 0]
 [30, 20, "To Nirvana", "en", "en", 1, "title", "original", null, null, null, null, 0]
+[31, 22, "\u30a6\u30b9\u30a4\u30d2\u30ed\u30b7", "ja", "ja", 1, "act_name", "original", "\u3046\u3059\u3044\u3072\u308d\u3057", null, null, null, 0]
+[32, 22, "HIROSHI USUI", "en", "en-US", 1, "act_name", "adapted", null, 31, null, null, 0]
+[33, 23, "\u8d64\u306e\u540c\u76df", "ja", "ja", 1, "title", "original", null, null, null, null, 0]
+[34, 23, "Alianza de sangre", "es", "en-US", 1, "title", "original", null, null, null, null, 0]
