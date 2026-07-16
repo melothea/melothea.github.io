@@ -26,3 +26,5 @@
 [26, 1, "Yuichi Kodama", "ja-Latn", "en", 0, "act_name", "adapted", null, 1, null, null, 0]
 [27, 4, "Ukigumo", "ja-Latn", "en", 1, "act_name", "adapted", null, 4, null, null, 0]
 [28, 14, "HIRAMA MIKIO", "ja-Latn", "en", 1, "act_name", "adapted", null, 11, null, null, 0]
+[29, 20, "\u4ecf\u3060\u3051\u5f92\u6b69", "ja", "ja", 1, "title", "original", null, null, null, null, 0]
+[30, 20, "To Nirvana", "en", "en", 1, "title", "original", null, null, null, null, 0]

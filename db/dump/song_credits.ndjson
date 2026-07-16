@@ -12,3 +12,6 @@
 [12, 18, 2, "lyricist", null]
 [13, 18, 5, "composer", null]
 [14, 18, 7, "arranger", null]
+[15, 20, 2, "lyricist", null]
+[16, 20, 2, "composer", null]
+[17, 20, 7, "arranger", null]
