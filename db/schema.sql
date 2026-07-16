@@ -8,7 +8,8 @@
 --   people/groups/songs/videos.id は entities(id) を兼ねる素のPK
 --   関係テーブル・生記述層は代理キー id INTEGER PRIMARY KEY。UNIQUE当面なし
 --
--- 出典：親表ごとの子テーブル（{親表名}_sources）が 1 出典 1 行で保持する（本ファイル末尾）。
+-- 出典：sources（出典文書のマスタ）と、親表ごとの付与子テーブル（{親表名}_sources）が
+--       parent_id×source_id の組で保持する（本ファイル末尾）。
 --
 -- 外部キーは接続ごとに有効化する（下記PRAGMA）。
 
@@ -214,211 +215,105 @@ INSERT INTO source_labels(label, volatile) VALUES
   ('web_news',        1),
   ('editor_verified', 1);
 
--- 各親表の出典子テーブル {親表名}_sources。列・CHECKは全12枚に同一に付す。
---   日付   ：referenced_at は disc/video_disc 以外で必須
---   URL    ：disc/video_disc/editor_verified は url NULL、それ以外は url 必須
---   記述子 ：editor_verified は descriptor NULL、それ以外は descriptor 必須
---   記録   ：editor_verified は record_ref 必須（私有記録の参照キー）、それ以外は NULL
-CREATE TABLE names_sources (
+-- sources：出典文書のマスタ。1確認先文書につき1行。
+--   日付：referenced_at は disc/video_disc 以外で必須
+--   URL 系（video_stream/apple_music/youtube_music/official_site/official_sns/web_news）：
+--     url 必須、catalog_no・record_ref は NULL
+--   媒体系（disc/video_disc）：catalog_no は任意、url・record_ref は NULL
+--   私的確認（editor_verified）：record_ref 必須（私有記録の参照キー）、url・catalog_no は NULL
+--   一意性：url は非NULL行内で一意／(label, catalog_no) は catalog_no 非NULL行内で一意／
+--          record_ref は非NULL行内で一意
+CREATE TABLE sources (
   id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES names(id),
   label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
   url           TEXT,
-  referenced_at TEXT,                                   -- ISO 8601 YYYY-MM-DD
+  catalog_no    TEXT,
   record_ref    TEXT,
+  referenced_at TEXT,                                   -- ISO 8601 YYYY-MM-DD
   CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
+  CHECK ((label IN ('video_stream','apple_music','youtube_music','official_site','official_sns','web_news') AND url IS NOT NULL)
+      OR (label NOT IN ('video_stream','apple_music','youtube_music','official_site','official_sns','web_news') AND url IS NULL)),
+  CHECK (label IN ('disc','video_disc') OR catalog_no IS NULL),
   CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
       OR (label <> 'editor_verified' AND record_ref IS NULL))
+);
+CREATE UNIQUE INDEX idx_sources_url
+  ON sources(url) WHERE url IS NOT NULL;
+CREATE UNIQUE INDEX idx_sources_label_catalog_no
+  ON sources(label, catalog_no) WHERE catalog_no IS NOT NULL;
+CREATE UNIQUE INDEX idx_sources_record_ref
+  ON sources(record_ref) WHERE record_ref IS NOT NULL;
+
+-- 各親表の出典付与子テーブル {親表名}_sources。列構成は全12枚に同一に付す。
+-- parent_id×source_id の付与行のみを持つ（出典の意味論は sources へ集約）。
+CREATE TABLE names_sources (
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES names(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );
 
 CREATE TABLE memberships_sources (
-  id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES memberships(id),
-  label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
-  url           TEXT,
-  referenced_at TEXT,
-  record_ref    TEXT,
-  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
-      OR (label <> 'editor_verified' AND record_ref IS NULL))
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES memberships(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );
 
 CREATE TABLE group_activity_periods_sources (
-  id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES group_activity_periods(id),
-  label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
-  url           TEXT,
-  referenced_at TEXT,
-  record_ref    TEXT,
-  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
-      OR (label <> 'editor_verified' AND record_ref IS NULL))
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES group_activity_periods(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );
 
 CREATE TABLE song_artists_sources (
-  id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES song_artists(id),
-  label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
-  url           TEXT,
-  referenced_at TEXT,
-  record_ref    TEXT,
-  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
-      OR (label <> 'editor_verified' AND record_ref IS NULL))
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES song_artists(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );
 
 CREATE TABLE song_credits_sources (
-  id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES song_credits(id),
-  label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
-  url           TEXT,
-  referenced_at TEXT,
-  record_ref    TEXT,
-  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
-      OR (label <> 'editor_verified' AND record_ref IS NULL))
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES song_credits(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );
 
 CREATE TABLE video_credits_sources (
-  id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES video_credits(id),
-  label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
-  url           TEXT,
-  referenced_at TEXT,
-  record_ref    TEXT,
-  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
-      OR (label <> 'editor_verified' AND record_ref IS NULL))
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES video_credits(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );
 
 CREATE TABLE song_release_dates_sources (
-  id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES song_release_dates(id),
-  label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
-  url           TEXT,
-  referenced_at TEXT,
-  record_ref    TEXT,
-  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
-      OR (label <> 'editor_verified' AND record_ref IS NULL))
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES song_release_dates(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );
 
 CREATE TABLE video_release_dates_sources (
-  id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES video_release_dates(id),
-  label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
-  url           TEXT,
-  referenced_at TEXT,
-  record_ref    TEXT,
-  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
-      OR (label <> 'editor_verified' AND record_ref IS NULL))
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES video_release_dates(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );
 
 CREATE TABLE crew_raw_sources (
-  id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES crew_raw(id),
-  label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
-  url           TEXT,
-  referenced_at TEXT,
-  record_ref    TEXT,
-  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
-      OR (label <> 'editor_verified' AND record_ref IS NULL))
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES crew_raw(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );
 
 CREATE TABLE location_raw_sources (
-  id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES location_raw(id),
-  label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
-  url           TEXT,
-  referenced_at TEXT,
-  record_ref    TEXT,
-  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
-      OR (label <> 'editor_verified' AND record_ref IS NULL))
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES location_raw(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );
 
 CREATE TABLE song_artist_raw_sources (
-  id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES song_artist_raw(id),
-  label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
-  url           TEXT,
-  referenced_at TEXT,
-  record_ref    TEXT,
-  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
-      OR (label <> 'editor_verified' AND record_ref IS NULL))
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES song_artist_raw(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );
 
 CREATE TABLE video_artist_raw_sources (
-  id            INTEGER PRIMARY KEY,
-  parent_id     INTEGER NOT NULL REFERENCES video_artist_raw(id),
-  label         TEXT NOT NULL REFERENCES source_labels(label),
-  descriptor    TEXT,
-  url           TEXT,
-  referenced_at TEXT,
-  record_ref    TEXT,
-  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),
-  CHECK ((label IN ('disc','video_disc','editor_verified') AND url IS NULL)
-      OR (label NOT IN ('disc','video_disc','editor_verified') AND url IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND descriptor IS NULL)
-      OR (label <> 'editor_verified' AND descriptor IS NOT NULL)),
-  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)
-      OR (label <> 'editor_verified' AND record_ref IS NULL))
+  id        INTEGER PRIMARY KEY,
+  parent_id INTEGER NOT NULL REFERENCES video_artist_raw(id),
+  source_id INTEGER NOT NULL REFERENCES sources(id)
 );

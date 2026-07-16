@@ -1,0 +1,12 @@
+{
+    "name": "sources",
+    "columns": [
+        "id",
+        "label",
+        "url",
+        "catalog_no",
+        "record_ref",
+        "referenced_at"
+    ],
+    "schema": "CREATE TABLE sources (\n  id            INTEGER PRIMARY KEY,\n  label         TEXT NOT NULL REFERENCES source_labels(label),\n  url           TEXT,\n  catalog_no    TEXT,\n  record_ref    TEXT,\n  referenced_at TEXT,\n  CHECK (referenced_at IS NOT NULL OR label IN ('disc','video_disc')),\n  CHECK ((label IN ('video_stream','apple_music','youtube_music','official_site','official_sns','web_news') AND url IS NOT NULL)\n      OR (label NOT IN ('video_stream','apple_music','youtube_music','official_site','official_sns','web_news') AND url IS NULL)),\n  CHECK (label IN ('disc','video_disc') OR catalog_no IS NULL),\n  CHECK ((label = 'editor_verified' AND record_ref IS NOT NULL)\n      OR (label <> 'editor_verified' AND record_ref IS NULL))\n)"
+}

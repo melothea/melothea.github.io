@@ -11,10 +11,11 @@
 --   2 memberships.member型 / 3 credits二表の参加者型 / 4 出演個人原則 /
 --   5 derives_from 非循環・同一entity内 / 6 期間の正気度 /
 --   7 video_credits.role・video_type・release_type の語彙リスト照合／release_dates.date のISO形式 /
---   8 完全重複行 /
+--   8 完全重複行（8b：出典付与12表の (parent_id, source_id) 重複） /
 --   9 出典層の整合：
 --     (a) 子テーブル対象12表の各行に対応する出典子テーブル行が1件以上（video_songs は対象外）
 --     (b) source_labels の volatile=0 のラベル集合が {'disc','video_disc'} と一致
+--     (c) どの出典子テーブルからも参照されていない sources 行（孤立行）の検出
 --     (d) videos.title_name_id の参照先 names が当該MV自身の title 行であること
 
 -- ============================================================
@@ -291,90 +292,90 @@ FROM (
   WINDOW w AS (PARTITION BY video_id, date, release_type)
 ) WHERE c > 1 AND id <> first_id;
 
--- --- 8b. 出典子テーブル12枚の完全重複行（parent_id含む全非id列一致） ---
---    全列一致のみを重複とみなす。
+-- --- 8b. 出典子テーブル12枚の (parent_id, source_id) 重複行 ---
+--    非id列がこの2列のみのため、完全重複行検出＝同一出典の重複付与検出と等価。
 SELECT 'dup_row_names_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM names_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_memberships_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM memberships_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_group_activity_periods_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM group_activity_periods_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_song_artists_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM song_artists_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_song_credits_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM song_credits_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_mv_credits_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM video_credits_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_crew_raw_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM crew_raw_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_location_raw_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM location_raw_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_song_artist_raw_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM song_artist_raw_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_mv_artist_raw_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM video_artist_raw_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_song_release_dates_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM song_release_dates_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 SELECT 'dup_row_video_release_dates_sources' AS check_name, id AS id, 'duplicate of id '||first_id AS detail
 FROM (
   SELECT id, MIN(id) OVER w AS first_id, COUNT(*) OVER w AS c
   FROM video_release_dates_sources
-  WINDOW w AS (PARTITION BY parent_id, label, descriptor, url, referenced_at, record_ref)
+  WINDOW w AS (PARTITION BY parent_id, source_id)
 ) WHERE c > 1 AND id <> first_id;
 
 -- ============================================================
@@ -429,6 +430,23 @@ SELECT 'volatile_zero_label_set' AS check_name, 0 AS id,
 WHERE EXISTS (SELECT 1 FROM source_labels WHERE volatile = 0 AND label NOT IN ('disc','video_disc'))
    OR EXISTS (SELECT 1 FROM source_labels WHERE label IN ('disc','video_disc') AND (volatile <> 0 OR volatile IS NULL))
    OR (SELECT count(*) FROM source_labels WHERE volatile = 0) <> 2;
+
+-- (c) どの出典子テーブルからも参照されていない sources 行（孤立行）の検出。
+SELECT 'orphan_source' AS check_name, s.id AS id,
+       'label='||s.label||' url='||COALESCE(s.url,'')||' record_ref='||COALESCE(s.record_ref,'') AS detail
+FROM sources s
+WHERE NOT EXISTS (SELECT 1 FROM names_sources t WHERE t.source_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM memberships_sources t WHERE t.source_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM group_activity_periods_sources t WHERE t.source_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM song_artists_sources t WHERE t.source_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM song_credits_sources t WHERE t.source_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM video_credits_sources t WHERE t.source_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM song_release_dates_sources t WHERE t.source_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM video_release_dates_sources t WHERE t.source_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM crew_raw_sources t WHERE t.source_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM location_raw_sources t WHERE t.source_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM song_artist_raw_sources t WHERE t.source_id = s.id)
+  AND NOT EXISTS (SELECT 1 FROM video_artist_raw_sources t WHERE t.source_id = s.id);
 
 -- (d) videos.title_name_id が非NULLなら、参照先 names 行の entity_id が当該MV自身であり
 --     name_type='title' であること。
