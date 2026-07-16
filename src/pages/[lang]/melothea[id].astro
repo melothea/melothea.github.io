@@ -162,9 +162,9 @@ const other = otherLang(lang);
     <dl class="facts">
       {videoReleaseRows.map((r) => (
         <>
-          <dt>{L.productionYear}</dt>
+          <dt>{L.release}</dt>
           <dd>
-            {r.date.slice(0, 4)}{r.releaseType != null && ` ${releaseTypeLabel[lang][r.releaseType] ?? r.releaseType}`}
+            {videoReleaseRows.length === 1 ? r.date.slice(0, 4) : r.date}{r.releaseType != null && ` ${releaseTypeLabel[lang][r.releaseType] ?? r.releaseType}`}
             <SourceList sources={r.sources} summary={L.sources} labelText={sourceLabel[lang]} />
           </dd>
         </>
