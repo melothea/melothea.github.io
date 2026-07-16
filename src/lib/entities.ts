@@ -16,17 +16,19 @@ import {
 } from './db.ts';
 import { renderPerson, type Lang, type Rendered } from './names.ts';
 
-// ---- 出典（各親表の {親表名}_sources 子テーブル。1ソース1行）----
+// ---- 出典（sources マスタ + 各親表の {親表名}_sources 付与テーブル）----
 
 export interface SourceEntry {
+  id: number;
   label: string;
-  descriptor: string | null;
   url: string | null;
-  referencedAt: string | null;
+  catalogNo: string | null;
   recordRef: string | null;
+  referencedAt: string | null;
 }
 
-/** 親行に紐づく出典行を投入順（id 昇順）で返す。childTable は内部固定の表名のみ。 */
+/** 親行に紐づく出典を sources.id 昇順で返す。childTable は内部固定の表名のみ。
+ *  付与テーブル（id・parent_id・source_id）と sources を結合する。 */
 type SourceChildTable =
   | 'names_sources'
   | 'memberships_sources'
@@ -39,22 +41,40 @@ type SourceChildTable =
 
 export function sourcesFor(childTable: SourceChildTable, parentId: number): SourceEntry[] {
   const rows = query<{
+    id: number;
     label: string;
-    descriptor: string | null;
     url: string | null;
-    referenced_at: string | null;
+    catalog_no: string | null;
     record_ref: string | null;
+    referenced_at: string | null;
   }>(
-    `SELECT label, descriptor, url, referenced_at, record_ref FROM ${childTable} WHERE parent_id = ? ORDER BY id`,
+    `SELECT s.id, s.label, s.url, s.catalog_no, s.record_ref, s.referenced_at
+       FROM ${childTable} c JOIN sources s ON s.id = c.source_id
+      WHERE c.parent_id = ?
+      ORDER BY s.id`,
     parentId,
   );
   return rows.map((r) => ({
+    id: r.id,
     label: r.label,
-    descriptor: r.descriptor,
     url: r.url,
-    referencedAt: r.referenced_at,
+    catalogNo: r.catalog_no,
     recordRef: r.record_ref,
+    referencedAt: r.referenced_at,
   }));
+}
+
+/** 複数の出典配列を sources.id で重複除去して1本化し、id昇順に整列する。
+ *  1つの表示行（li・dd等）に複数の親行（複数期間・複数楽曲由来など）が集約される場合、
+ *  details（srcbox）を表示行につき1個に保つために用いる。 */
+export function mergeSources(...lists: SourceEntry[][]): SourceEntry[] {
+  const map = new Map<number, SourceEntry>();
+  for (const list of lists) {
+    for (const s of list) {
+      if (!map.has(s.id)) map.set(s.id, s);
+    }
+  }
+  return [...map.values()].sort((a, b) => a.id - b.id);
 }
 
 // ---- 並び規則の共通ユーティリティ（役割優先順・名前キー比較・年比較） ----

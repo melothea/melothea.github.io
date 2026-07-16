@@ -72,6 +72,32 @@ export const releaseTypeLabel: Record<Lang, Record<string, string>> = {
   en: {},
 };
 
+// 出典ラベル語彙（source_labels）→ 表示語（言語ページ）
+export const sourceLabel: Record<Lang, Record<string, string>> = {
+  ja: {
+    disc: '音楽ディスク',
+    video_disc: '映像ディスク',
+    video_stream: '映像ストリーミング',
+    apple_music: 'Apple Music',
+    youtube_music: 'YouTube Music',
+    official_site: '公式サイト',
+    official_sns: '公式SNS',
+    web_news: 'Webニュース',
+    editor_verified: '編纂者確認',
+  },
+  en: {
+    disc: 'Music disc',
+    video_disc: 'Video disc',
+    video_stream: 'Video streaming',
+    apple_music: 'Apple Music',
+    youtube_music: 'YouTube Music',
+    official_site: 'Official site',
+    official_sns: 'Official SNS',
+    web_news: 'Web news',
+    editor_verified: 'Editor verified',
+  },
+};
+
 // セクション見出し等（言語ページ）
 export const ui: Record<Lang, Record<string, string>> = {
   ja: {
@@ -95,7 +121,6 @@ export const ui: Record<Lang, Record<string, string>> = {
     kind: '種別区分',
     source: '出典',
     sources: '出典',
-    editorVerified: '編纂者確認',
     home: '一覧',
     langName: '日本語',
   },
@@ -120,7 +145,6 @@ export const ui: Record<Lang, Record<string, string>> = {
     kind: 'Type',
     source: 'Source',
     sources: 'Sources',
-    editorVerified: 'Editor-verified',
     home: 'Index',
     langName: 'English',
   },
