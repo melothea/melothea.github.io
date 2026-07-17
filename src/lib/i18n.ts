@@ -123,6 +123,8 @@ export const ui: Record<Lang, Record<string, string>> = {
     sources: '出典',
     home: '一覧',
     langName: '日本語',
+    watchOnYoutube: 'YouTubeで見る',
+    play: '再生',
   },
   en: {
     release: 'Release',
@@ -147,6 +149,8 @@ export const ui: Record<Lang, Record<string, string>> = {
     sources: 'Sources',
     home: 'Index',
     langName: 'English',
+    watchOnYoutube: 'Watch on YouTube',
+    play: 'Play',
   },
 };
 

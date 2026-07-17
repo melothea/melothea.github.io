@@ -56,6 +56,7 @@ export interface VideoRow {
   id: number;
   video_type: string | null;
   status: string;
+  watch_url: string | null;
 }
 
 export interface SongArtistRow {

@@ -43,6 +43,9 @@ type Line = {
 type Section = { title: string; titleLang?: string; level?: 2 | 3; lines: Line[] };
 const sections: Section[] = [];
 const facts: { label: string; value: string }[] = [];
+// 視聴ブロック（MV。watch_url が非NULLのときのみ）：動画IDは watch_url の watch?v= パラメータの値。
+let watchUrl: string | null = null;
+let watchVideoId: string | null = null;
 // person/group の「映像での関与（Music video work）」節：MVごとに役割を集約
 const videoRoleGroups: { videoId: number; year: string | null; roles: { roleKey: string; sources: SourceEntry[] }[] }[] = [];
 // person/group の「楽曲（Songs）」節：楽曲ごとに main アーティスト＋作家クレジットを集約
@@ -85,6 +88,8 @@ if (entity.entity_type === 'song') {
   const at = videoYear(id);
   if (videoReleaseRows.length === 0 && at != null) facts.push({ label: L.productionYear, value: at });
   if (m?.video_type) facts.push({ label: L.videoType, value: videoTypeLabel[lang][m.video_type] ?? m.video_type });
+  watchUrl = m?.watch_url ?? null;
+  watchVideoId = watchUrl ? new URL(watchUrl).searchParams.get('v') : null;
   // アーティスト（見出し直下・クレジット欄より上）：収録楽曲の main を video_songs 経由で導出。
   // 表示名はクレジット文脈（renderCredit・atDate=MVの日付）でページ言語のカスケード解決。
   // 例外：この節は videoMainArtists の導出順（position 走査順）のまま、並べ替えない。
@@ -176,6 +181,28 @@ const other = otherLang(lang);
     <dl class="facts">
       {facts.map((f) => (<><dt>{f.label}</dt><dd>{f.value}</dd></>))}
     </dl>
+  )}
+
+  {watchUrl && watchVideoId && (
+    <div class="watch">
+      <div class="watch-frame" data-video-id={watchVideoId} data-title={heading.main.text}>
+        <img src={`https://i.ytimg.com/vi/${watchVideoId}/hqdefault.jpg`} alt={heading.main.text} loading="lazy" />
+        <button type="button" aria-label={L.play}></button>
+      </div>
+      <p><a href={watchUrl}>{L.watchOnYoutube}</a></p>
+      <script is:inline>
+        document.querySelectorAll('.watch-frame').forEach((frame) => {
+          frame.addEventListener('click', () => {
+            const iframe = document.createElement('iframe');
+            iframe.src = `https://www.youtube-nocookie.com/embed/${frame.dataset.videoId}?autoplay=1`;
+            iframe.title = frame.dataset.title ?? '';
+            iframe.allow = 'autoplay; encrypted-media; picture-in-picture';
+            iframe.allowFullscreen = true;
+            frame.replaceChildren(iframe);
+          }, { once: true });
+        });
+      </script>
+    </div>
   )}
 
   {songReleaseRows.length > 0 && (
