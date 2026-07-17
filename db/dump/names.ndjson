@@ -32,3 +32,7 @@
 [32, 22, "HIROSHI USUI", "en", "en", 1, "act_name", "adapted", null, 31, null, null, 0]
 [33, 23, "\u8d64\u306e\u540c\u76df", "ja", "ja", 1, "title", "original", null, null, null, null, 0]
 [34, 23, "Alianza de sangre", "es", "en", 1, "title", "original", null, null, null, null, 0]
+[35, 25, "\u4e09\u5b85\u7d14", "ja", "ja", 1, "act_name", "original", "\u307f\u3084\u3051\u3058\u3085\u3093", null, null, null, 0]
+[36, 25, "Jun Miyake", "ja-Latn", "en", 1, "act_name", "original", null, null, null, null, 0]
+[37, 26, "\u81f3\u5b9d", "ja", "ja", 1, "title", "original", null, null, null, null, 0]
+[38, 26, "adamant", "en", "en", 1, "title", "original", null, null, null, null, 0]
