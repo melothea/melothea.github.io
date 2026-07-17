@@ -17,6 +17,7 @@
 --     (b) source_labels の volatile=0 のラベル集合が {'disc','video_disc'} と一致
 --     (c) どの出典子テーブルからも参照されていない sources 行（孤立行）の検出
 --     (d) videos.title_name_id の参照先 names が当該MV自身の title 行であること
+--   10 videos.watch_url の正規形・一意性
 
 -- ============================================================
 -- 0. サブタイプ表 × entity_type の照合
@@ -457,3 +458,21 @@ FROM videos m
 JOIN names n ON n.id = m.title_name_id
 WHERE m.title_name_id IS NOT NULL
   AND (n.entity_id <> m.id OR n.name_type <> 'title');
+
+-- ============================================================
+-- 10. videos.watch_url の正規形・一意性
+-- ============================================================
+
+-- 正規形検査：watch_url が非NULLならYouTube視聴ページの正規形URLで始まること。
+SELECT 'video_watch_url_format' AS check_name, id AS id, 'watch_url='||watch_url AS detail
+FROM videos
+WHERE watch_url IS NOT NULL
+  AND watch_url NOT LIKE 'https://www.youtube.com/watch?v=%';
+
+-- 一意性検査：watch_url が非NULLの行のうち、同一値が複数行に存在するもの。
+SELECT 'video_watch_url_unique' AS check_name, id AS id, 'watch_url='||watch_url AS detail
+FROM (
+  SELECT id, watch_url, COUNT(*) OVER (PARTITION BY watch_url) AS c
+  FROM videos
+  WHERE watch_url IS NOT NULL
+) WHERE c > 1;

@@ -8,7 +8,8 @@
         "description_source",
         "wikidata_qid",
         "mbid",
-        "title_name_id"
+        "title_name_id",
+        "watch_url"
     ],
-    "schema": "CREATE TABLE \"videos\" (\n  id                 INTEGER PRIMARY KEY REFERENCES entities(id),\n  video_type         TEXT,                             -- \u7a2e\u5225\u3002NULL\u53ef\u3002CI\u8a9e\u5f59\u30ea\u30b9\u30c8\u3067\u7167\u5408\uff08CHECK\u306a\u3057\uff09\n  status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),\n  description        TEXT,\n  description_source TEXT CHECK (description_source IN ('ai','manual','ai_edited')),\n  wikidata_qid       TEXT,\n  mbid               TEXT,\n  title_name_id      INTEGER REFERENCES names(id),      -- \u4ee3\u8868\u984c\u306e\u540d\u7fa9\u884c\uff08\u8868\u793a\u984c\u306e\u57fa\u6e96\u3002\u65e2\u5b58\u884c\u306fNULL\uff09\n  CHECK (description IS NOT NULL OR description_source IS NULL)\n)"
+    "schema": "CREATE TABLE \"videos\" (\n  id                 INTEGER PRIMARY KEY REFERENCES entities(id),\n  video_type         TEXT,                             -- \u7a2e\u5225\u3002NULL\u53ef\u3002CI\u8a9e\u5f59\u30ea\u30b9\u30c8\u3067\u7167\u5408\uff08CHECK\u306a\u3057\uff09\n  status             TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','published')),\n  description        TEXT,\n  description_source TEXT CHECK (description_source IN ('ai','manual','ai_edited')),\n  wikidata_qid       TEXT,\n  mbid               TEXT,\n  title_name_id      INTEGER REFERENCES names(id), watch_url TEXT,      -- \u4ee3\u8868\u984c\u306e\u540d\u7fa9\u884c\uff08\u8868\u793a\u984c\u306e\u57fa\u6e96\u3002\u65e2\u5b58\u884c\u306fNULL\uff09\n  CHECK (description IS NOT NULL OR description_source IS NULL)\n)"
 }

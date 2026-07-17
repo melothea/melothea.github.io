@@ -64,8 +64,10 @@ CREATE TABLE videos (
   wikidata_qid       TEXT,
   mbid               TEXT,
   title_name_id      INTEGER REFERENCES names(id),      -- 代表題の名義行（表示題の基準。既存行はNULL）
+  watch_url          TEXT,                             -- 視聴場所（YouTube視聴ページの正規形URL https://www.youtube.com/watch?v={ID}）。NULL可。出典とは別物
   CHECK (description IS NOT NULL OR description_source IS NULL)
 );
+CREATE UNIQUE INDEX idx_videos_watch_url ON videos(watch_url) WHERE watch_url IS NOT NULL;
 
 -- ============================================================
 -- names（名義・表記）
