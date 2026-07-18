@@ -27,3 +27,6 @@
 [27, 35, 2, "lyricist", null]
 [28, 35, 5, "composer", null]
 [29, 35, 2, "arranger", null]
+[30, 39, 2, "lyricist", null]
+[31, 39, 5, "composer", null]
+[32, 39, 38, "arranger", null]

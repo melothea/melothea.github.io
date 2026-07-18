@@ -50,3 +50,8 @@
 [50, 34, "Masaki Hayashi", "ja-Latn", "en", 1, "act_name", "original", null, null, null, null, 0]
 [51, 35, "\u677e\u306b\u9db4", "ja", "ja", 1, "title", "original", null, null, null, null, 0]
 [52, 35, "Este nuevo problema", "es", "en", 1, "title", "original", null, null, null, null, 0]
+[53, 37, "AYA SATO", "ja-Latn", null, 0, "act_name", "original", null, null, null, null, 0]
+[54, 38, "\u6751\u7530\u967d\u4e00", "ja", "ja", 1, "act_name", "original", "\u3080\u3089\u305f\u3088\u3046\u3044\u3061", null, null, null, 0]
+[55, 38, "Yoichi MURATA", "ja-Latn", "en", 1, "act_name", "adapted", null, null, null, null, 0]
+[56, 39, "\u8292\u306b\u6708", "ja", "ja", 1, "title", "original", null, null, null, null, 0]
+[57, 39, "La velada legendaria", "es", "en", 1, "title", "original", null, null, null, null, 0]
